@@ -128,6 +128,12 @@ Bảng tiến độ nhóm, đọc từ trạng thái sống của repo:
 uv run python script/team_progress.py
 ```
 
+Demo khác biệt clean / corrupted / repaired cho team, đọc từ artifact thật:
+
+```bash
+uv run python script/demo_three_states.py
+```
+
 ### Kết quả tái hiện
 
 | Lệnh             | Trạng thái                                    | Thời điểm chạy gần nhất | Bằng chứng                         |
@@ -319,6 +325,35 @@ Corruption log:
 - Trạng thái: Có. 24 → 22 row, unique `paper_id` 24 → 20, ghi đủ 6 action kèm danh sách `paper_ids` bị tác động
 - Nội dung log ghi lại: `seed`, `rows_before`, `rows_after`, `unique_paper_ids_before`, `unique_paper_ids_after`, và với mỗi action là `type`, `target_pillar`, `rows_affected`, danh sách `paper_ids` bị tác động, `detail`.
 
+### Xác minh repair là thật, không phải copy từ baseline
+
+Repair chạy `build_clean_dataframe()` trên `data/raw/crossref_records.json` ([corruption_flow.py](../src/pipelines/corruption_flow.py) — `repaired_df = build_clean_dataframe(raw_records, run_date=now_utc())`), không có bước nào đọc `papers_clean.json` của baseline.
+
+Kiểm chứng bằng fingerprint SHA-256 trên 15 cột (bỏ `age_days` vì phụ thuộc thời điểm chạy), sắp xếp theo `paper_id`:
+
+| Dataset | Fingerprint |
+| --- | --- |
+| Rebuild trực tiếp từ raw | `7ca4ac976fcc615e` |
+| `papers_clean_repaired.json` | `7ca4ac976fcc615e` |
+| `papers_clean.json` (baseline) | `7ca4ac976fcc615e` |
+| `papers_clean_corrupted.json` | `deacfbdcda1f91a1` |
+
+Repaired trùng khớp bit-for-bit với bản rebuild từ raw. Việc nó cũng trùng baseline là hệ quả đúng chứ không phải dấu hiệu copy — cả hai đều sinh từ cùng raw records qua cùng một hàm, nên bắt buộc phải giống nhau. Cái phân biệt là corrupted có fingerprint khác hẳn, và repaired không mang bất kỳ dấu vết nào của nó.
+
+Gate contract trên repaired: 24 row, 0 duplicate `paper_id`, 0 summary rỗng, 0 `text_for_embedding` rỗng, đủ 16 cột.
+
+### Đối chiếu quality signals ba trạng thái
+
+| Signal | Baseline | Corrupted | Repaired |
+| --- | ---: | ---: | ---: |
+| Số row | 24 | 22 | 24 |
+| Unique `paper_id` | 24 | 20 | 24 |
+| `paper_id` unique | True | **False** | True |
+| Summary rỗng | 0 | 3 | 0 |
+| Row stale > 180 ngày | 0 | 5 | 0 |
+| `published` mới nhất | 2026-08-01 | 2026-07-03 | 2026-08-01 |
+| `published` cũ nhất | 2026-02-12 | **2018-03-17** | 2026-02-12 |
+
 Giải thích cách repair đảm bảo dữ liệu được phục hồi từ nguồn đáng tin cậy thay vì chỉ che kết quả lỗi:
 
 Repair không có hàm riêng và không đảo ngược từng phép corruption. Nó chạy lại đúng hàm `build_clean_dataframe()` trên `data/raw/crossref_records.json` — tức là quay về nguồn raw mà corruption không bao giờ chạm tới — rồi build index mới vào collection `papers-repaired` và đánh giá lại bằng cùng test set. Vì corruption chỉ ghi lên `data/clean/papers_clean_corrupted.*`, raw vẫn là bản ghi gốc đáng tin. Cách này chứng minh được là pipeline phục hồi từ lineage chứ không phải sửa tay `answers` hay `metrics` cho đẹp số.
@@ -446,4 +481,4 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 - [x] Quality/freshness conclusions khớp với `data/quality/`.
 - [x] Các đường dẫn báo cáo và artifact truy cập được.
 - [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng — `report/individual_report.md` còn trống.
-- [x] Không có `.env`, API key, token hoặc secret trong source, report, log hay ảnh.
+- [x] Không có `.env`, API key, token hoặc secret trong source, report, log hay ảnh — đã quét cả working tree lẫn toàn bộ lịch sử git (`sk-proj-`, `AIzaSy`, `ghp_`: 0 kết quả); `.env` chưa từng được commit và đang bị `.gitignore` chặn.
