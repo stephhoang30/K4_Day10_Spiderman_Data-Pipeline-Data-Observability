@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from statistics import mean
 import os
+import re
 import sys
 import types
 from typing import Any
@@ -45,11 +46,77 @@ def _token_f1(reference: str, prediction: str) -> float:
     return 2 * precision * recall / (precision + recall)
 
 
-def _judge_answer(settings: Settings, question: str, reference: str, prediction: str) -> JudgeVerdict:
+def _safe_mean(values: list[float]) -> float:
+    return mean(values) if values else 0.0
+
+
+def _canonical_items(value: str) -> set[str]:
+    items = re.split(r"[,;|]", normalize_whitespace(value).lower())
+    return {
+        re.sub(r"[^a-z0-9]+", " ", item).strip()
+        for item in items
+        if item.strip()
+    }
+
+
+def _set_f1(reference: str, prediction: str) -> float:
+    reference_items = _canonical_items(reference)
+    prediction_items = _canonical_items(prediction)
+    if not reference_items or not prediction_items:
+        return 0.0
+    overlap = len(reference_items & prediction_items)
+    if overlap == 0:
+        return 0.0
+    precision = overlap / len(prediction_items)
+    recall = overlap / len(reference_items)
+    return 2 * precision * recall / (precision + recall)
+
+
+def _answer_metric(question_type: str, reference: str, prediction: str) -> float:
+    if question_type in {"authors", "categories"}:
+        return _set_f1(reference, prediction)
+    if question_type == "date":
+        return float(
+            normalize_whitespace(reference).lower()
+            == normalize_whitespace(prediction).lower()
+        )
+    return _token_f1(reference, prediction)
+
+
+def _answer_correct(question_type: str, metric: float) -> bool:
+    if question_type in {"authors", "categories", "date"}:
+        return metric == 1.0
+    return metric >= 0.95
+
+
+def _retrieval_rank(retrieved_doc_ids: list[str], ground_truth_doc_ids: list[str]) -> int | None:
+    ground_truth = set(ground_truth_doc_ids)
+    for rank, doc_id in enumerate(retrieved_doc_ids, start=1):
+        if doc_id in ground_truth:
+            return rank
+    return None
+
+
+def _judge_answer(
+    settings: Settings,
+    question: str,
+    reference: str,
+    prediction: str,
+    question_type: str,
+) -> JudgeVerdict:
+    deterministic_metric = _answer_metric(question_type, reference, prediction)
+    if os.getenv("RUN_LLM_JUDGE", "").lower() not in {"1", "true", "yes"}:
+        return JudgeVerdict(
+            score=5 if deterministic_metric >= 0.95 else 3 if deterministic_metric >= 0.5 else 1,
+            correct=_answer_correct(question_type, deterministic_metric),
+            reasoning="Deterministic field-aware judge used; set RUN_LLM_JUDGE=1 for an LLM pass.",
+        )
+
     prompt = f"""
 Evaluate the model answer against the reference answer.
 
 Question: {question}
+Question type: {question_type}
 Reference answer: {reference}
 Model answer: {prediction}
 
@@ -62,11 +129,11 @@ Return:
         llm = build_llm(settings=settings, temperature=0.0).with_structured_output(JudgeVerdict)
         return llm.invoke(prompt)
     except Exception:
-        score = 5 if _token_f1(reference, prediction) >= 0.95 else 3 if _token_f1(reference, prediction) >= 0.5 else 1
+        score = 5 if deterministic_metric >= 0.95 else 3 if deterministic_metric >= 0.5 else 1
         return JudgeVerdict(
             score=score,
-            correct=score >= 3,
-            reasoning="Fallback heuristic judge used because the LLM evaluator was unavailable.",
+            correct=_answer_correct(question_type, deterministic_metric),
+            reasoning="Fallback deterministic judge used because the LLM evaluator was unavailable.",
         )
 
 
@@ -106,18 +173,30 @@ def evaluate_pipeline(
     test_set_path,
     metrics_output_path,
     answers_output_path,
+    dataset_variant: str = "baseline",
 ) -> EvaluationBundle:
     test_set = read_json(test_set_path)
     answers: list[dict[str, Any]] = []
 
     for item in test_set:
         result = answer_question(item["question"], settings=settings, index=index)
-        judge = _judge_answer(settings, item["question"], item["ground_truth"], result.answer)
-        retrieval_hit = any(doc_id in item["ground_truth_doc_ids"] for doc_id in result.retrieved_doc_ids)
+        question_type = item["question_type"]
+        answer_metric = _answer_metric(question_type, item["ground_truth"], result.answer)
+        answer_correct = _answer_correct(question_type, answer_metric)
+        retrieval_rank = _retrieval_rank(result.retrieved_doc_ids, item["ground_truth_doc_ids"])
+        retrieval_hit = retrieval_rank is not None
+        judge = _judge_answer(
+            settings,
+            item["question"],
+            item["ground_truth"],
+            result.answer,
+            question_type,
+        )
         answers.append(
             {
                 "id": item["id"],
-                "question_type": item["question_type"],
+                "dataset_variant": dataset_variant,
+                "question_type": question_type,
                 "question": item["question"],
                 "ground_truth": item["ground_truth"],
                 "ground_truth_doc_ids": item["ground_truth_doc_ids"],
@@ -125,21 +204,71 @@ def evaluate_pipeline(
                 "retrieved_doc_ids": result.retrieved_doc_ids,
                 "retrieved_contexts": result.retrieved_contexts,
                 "retrieval_hit": retrieval_hit,
+                "retrieval_rank": retrieval_rank,
+                "top_score": result.retrieved_scores[0] if result.retrieved_scores else None,
                 "token_f1": _token_f1(item["ground_truth"], result.answer),
+                "answer_metric": answer_metric,
+                "answer_correct": answer_correct,
+                "error_type": "none"
+                if retrieval_hit and answer_correct
+                else "retrieval_miss"
+                if not retrieval_hit
+                else "answer_mismatch",
                 "judge": judge.model_dump(),
             }
         )
 
-    summary = {
-        "samples": len(answers),
-        "retrieval_hit_rate": mean(1.0 if item["retrieval_hit"] else 0.0 for item in answers),
-        "mean_token_f1": mean(item["token_f1"] for item in answers),
-        "judge_accuracy": mean(1.0 if item["judge"]["correct"] else 0.0 for item in answers),
-        "mean_judge_score": mean(item["judge"]["score"] for item in answers),
-    }
+    summary = _summarize_answers(answers, dataset_variant, settings.top_k)
     summary["ragas"] = _run_ragas(settings, answers)
 
     bundle = EvaluationBundle(summary=summary, answers=answers)
     write_json(metrics_output_path, summary)
     write_json(answers_output_path, answers)
     return bundle
+
+
+def _summarize_answers(
+    answers: list[dict[str, Any]], dataset_variant: str, top_k: int
+) -> dict[str, Any]:
+    def summarize(items: list[dict[str, Any]]) -> dict[str, Any]:
+        ranks = [item["retrieval_rank"] for item in items if item["retrieval_rank"] is not None]
+        return {
+            "samples": len(items),
+            "retrieval_recall_at_1": _safe_mean(
+                [float(item["retrieval_rank"] == 1) for item in items]
+            ),
+            "retrieval_recall_at_k": _safe_mean(
+                [float(item["retrieval_rank"] is not None and item["retrieval_rank"] <= top_k) for item in items]
+            ),
+            "retrieval_mrr": _safe_mean([1.0 / rank for rank in ranks]),
+            "mean_top_score": _safe_mean(
+                [item["top_score"] for item in items if item["top_score"] is not None]
+            ),
+            "answer_accuracy": _safe_mean([float(item["answer_correct"]) for item in items]),
+            "mean_answer_metric": _safe_mean([item["answer_metric"] for item in items]),
+            "judge_accuracy": _safe_mean([float(item["judge"]["correct"]) for item in items]),
+            "mean_judge_score": _safe_mean([item["judge"]["score"] for item in items]),
+        }
+
+    by_question_type: dict[str, dict[str, Any]] = {}
+    for question_type in sorted({item["question_type"] for item in answers}):
+        by_question_type[question_type] = summarize(
+            [item for item in answers if item["question_type"] == question_type]
+        )
+
+    overall = summarize(answers)
+    return {
+        "dataset_variant": dataset_variant,
+        "samples": overall["samples"],
+        "retrieval_hit_rate": overall["retrieval_recall_at_k"],
+        "retrieval_recall_at_1": overall["retrieval_recall_at_1"],
+        "retrieval_recall_at_k": overall["retrieval_recall_at_k"],
+        "retrieval_mrr": overall["retrieval_mrr"],
+        "mean_top_score": overall["mean_top_score"],
+        "mean_token_f1": _safe_mean([item["token_f1"] for item in answers]),
+        "answer_accuracy": overall["answer_accuracy"],
+        "mean_answer_metric": overall["mean_answer_metric"],
+        "judge_accuracy": overall["judge_accuracy"],
+        "mean_judge_score": overall["mean_judge_score"],
+        "by_question_type": by_question_type,
+    }
