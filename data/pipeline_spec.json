@@ -1,0 +1,161 @@
+{
+  "generated_at": "2026-08-06T07:42:40.843970+00:00",
+  "source": {
+    "api": "Crossref REST API",
+    "url": "https://api.crossref.org/works",
+    "query": "agentic retrieval augmented generation large language model",
+    "filter": "from-pub-date:2026-02-07,has-abstract:true",
+    "max_results": 24
+  },
+  "retrieval": {
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "top_k": 4,
+    "collections": {
+      "baseline": "papers-baseline",
+      "corrupted": "papers-corrupted",
+      "repaired": "papers-repaired"
+    }
+  },
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4o-mini"
+  },
+  "stages": {
+    "crawl": "Goi Crossref REST API, luu raw response va parse thanh PaperRecord.",
+    "clean": "Chuan hoa text, parse date, loai row xau, dedupe, sinh cot derived.",
+    "index": "Embed text_for_embedding bang MiniLM va nap vao ChromaDB.",
+    "evaluate": "Chay agent tren test set, cham retrieval hit / token F1 / LLM judge.",
+    "observe": "Data quality checks + freshness report.",
+    "corrupt": "Chu dong tao 6 dang loi du lieu de do impact len agent.",
+    "repair": "Chay lai cleaning tu raw records dang tin, khong sua tay metrics."
+  },
+  "clean_contract": {
+    "columns": [
+      "paper_id",
+      "title",
+      "summary",
+      "authors",
+      "categories",
+      "primary_category",
+      "published",
+      "updated",
+      "abs_url",
+      "pdf_url",
+      "comment",
+      "authors_joined",
+      "categories_joined",
+      "summary_chars",
+      "age_days",
+      "text_for_embedding"
+    ],
+    "derived_columns": [
+      "authors_joined",
+      "categories_joined",
+      "summary_chars",
+      "age_days",
+      "text_for_embedding"
+    ],
+    "min_title_chars": 10,
+    "min_summary_chars": 40,
+    "reject_reasons": [
+      {
+        "key": "missing_paper_id",
+        "label": "Thieu paper_id"
+      },
+      {
+        "key": "short_title",
+        "label": "Title ngan hon 10 ky tu"
+      },
+      {
+        "key": "short_summary",
+        "label": "Summary ngan hon 40 ky tu"
+      },
+      {
+        "key": "unparsable_published",
+        "label": "Published khong parse duoc"
+      },
+      {
+        "key": "duplicate_paper_id",
+        "label": "Trung paper_id"
+      },
+      {
+        "key": "duplicate_title",
+        "label": "Trung title (case-insensitive)"
+      }
+    ],
+    "text_for_embedding_template": [
+      "Title",
+      "Authors",
+      "Categories",
+      "Published",
+      "Summary"
+    ]
+  },
+  "freshness": {
+    "threshold_days": 180
+  },
+  "corruption_spec": {
+    "seed": 20251110,
+    "min_surviving_rows": 6,
+    "kinds": [
+      {
+        "type": "drop_latest_records",
+        "pillar": "volume+freshness",
+        "fraction": 0.2,
+        "detail": "Xoa cac paper co published moi nhat."
+      },
+      {
+        "type": "blank_summary",
+        "pillar": "completeness",
+        "fraction": 0.15,
+        "detail": "Set summary rong, summary_chars ve 0."
+      },
+      {
+        "type": "inject_noise",
+        "pillar": "distribution",
+        "fraction": 0.15,
+        "detail": "Chen mojibake va rac OCR vao summary."
+      },
+      {
+        "type": "truncate_title",
+        "pillar": "schema+lookup",
+        "fraction": 0.15,
+        "detail": "Cat title con 18 ky tu."
+      },
+      {
+        "type": "stale_published",
+        "pillar": "freshness",
+        "fraction": 0.2,
+        "detail": "Lui published lai 2920 ngay."
+      },
+      {
+        "type": "duplicate_rows",
+        "pillar": "uniqueness",
+        "fraction": 0.1,
+        "detail": "Nhan ban row, pha uniqueness cua paper_id."
+      }
+    ]
+  },
+  "artifacts": {
+    "raw_api_response": "data/raw/crossref_response.json",
+    "raw_records": "data/raw/crossref_records.json",
+    "clean_json": "data/clean/papers_clean.json",
+    "clean_csv": "data/clean/papers_clean.csv",
+    "corrupted_json": "data/clean/papers_clean_corrupted.json",
+    "repaired_json": "data/clean/papers_clean_repaired.json",
+    "embeddings": "data/embeddings/papers_embeddings.json",
+    "corrupted_embeddings": "data/embeddings/papers_embeddings_corrupted.json",
+    "repaired_embeddings": "data/embeddings/papers_embeddings_repaired.json",
+    "test_set": "data/eval/test_set.json",
+    "baseline_metrics": "data/results/baseline_metrics.json",
+    "baseline_answers": "data/results/baseline_answers.json",
+    "corrupted_metrics": "data/results/corrupted_metrics.json",
+    "corrupted_answers": "data/results/corrupted_answers.json",
+    "repaired_metrics": "data/results/repaired_metrics.json",
+    "repaired_answers": "data/results/repaired_answers.json",
+    "corruption_log": "data/results/corruption_log.json",
+    "freshness_report": "data/quality/freshness_report.json",
+    "baseline_report": "data/reports/phase1_report.md",
+    "comparison_report": "data/reports/corruption_report.md"
+  }
+}
