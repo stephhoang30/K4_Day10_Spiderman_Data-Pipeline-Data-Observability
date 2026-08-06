@@ -35,7 +35,11 @@ Ingestion và cleaning đã chạy thông trên dữ liệu Crossref thật: 24 
 
 Embedding index đã build được trên dữ liệu thật (collection `papers-baseline`, 24 doc) và smoke test cho thấy semantic search, exact lookup theo title lẫn `paper_id`, và agent đều trả về kết quả có nguồn — trừ câu hỏi `categories` trả lời rỗng.
 
-Blocker hiện tại: `src/evaluation/testset.py`, `src/observability/quality.py` và `src/observability/reporting.py` (Role 5) còn `NotImplementedError`, nên chưa chạy được evaluation và report. Ngoài ra Crossref không trả `subject` cho bất kỳ record nào, làm loại câu hỏi `categories` không dùng được — xem mục 12.
+Baseline đã chạy tới bước cuối: test set 72 câu hỏi, evaluation, data quality (7 check, PASS) và freshness report (fresh) đều có artifact thật. Quality gate đã được audit bằng cách cho ăn corrupted data — overall lật PASS sang FAIL, tức là không hard-code pass (mục 8).
+
+Hai vấn đề lớn cần xử lý trước khi kết luận: **baseline degenerate**, mọi metric bằng 1.000 do test set nhúng nguyên title nên agent đi đường tắt exact lookup thay vì semantic search (mục 11.2); và **ba loại corruption không có check nào bắt được** — `drop_latest_records`, `truncate_title`, `inject_noise` (mục 8).
+
+Blocker còn lại: `src/observability/reporting.py` (Role 5) còn `NotImplementedError` nên chưa sinh được `phase1_report.md` và comparison report, kéo theo corruption flow chưa chạy được. Ngoài ra Crossref không trả `subject` cho bất kỳ record nào, làm loại câu hỏi `categories` không dùng được — xem mục 12.
 
 ## 3. Kiến trúc và luồng dữ liệu
 
@@ -118,11 +122,23 @@ Export spec pipeline ra JSON cho frontend đọc:
 uv run python script/export_pipeline_spec.py
 ```
 
+Audit xem quality gate có fail được không (cho nó ăn corrupted data):
+
+```bash
+uv run python script/audit_quality_gate.py
+```
+
+Bảng tiến độ nhóm, đọc từ trạng thái sống của repo:
+
+```bash
+uv run python script/team_progress.py
+```
+
 ### Kết quả tái hiện
 
 | Lệnh             | Trạng thái                                    | Thời điểm chạy gần nhất | Bằng chứng                         |
 | ----------------- | ----------------------------------------------- | ----------------------------- | ------------------------------------ |
-| Baseline pipeline | Chưa chạy hết — `phase1.py` đã implement, dừng ở `build_test_set` và `run_data_quality_checks` (Role 5) còn `NotImplementedError` | — | Các bước trước đó đã chạy tay thành công, xem 3 dòng dưới |
+| Baseline pipeline | Chạy được tới bước cuối, dừng ở `generate_phase1_report` (Role 5) còn `NotImplementedError`. Mọi bước trước đó thành công | 2026-08-06 | `data/eval/test_set.json`, `data/results/baseline_metrics.json`, `data/results/baseline_answers.json`, `data/quality/baseline_quality.json`, `data/quality/freshness_report.json` |
 | Corruption flow   | Chưa chạy được — phụ thuộc baseline metrics và test set | — | — |
 | `validate_clean_contract.py` | Thành công — 29/29 check PASS | 2026-08-06 | Output stdout của script, không cần artifact ngoài |
 | Index + smoke test (CP2: `LocalEmbeddingIndex.build` → semantic search / exact lookup / agent) | Thành công — search có kết quả xếp hạng, lookup theo title và `paper_id` đều trúng, agent trả lời 3/4 loại câu hỏi (`categories` rỗng) | 2026-08-06 | `data/embeddings/papers_embeddings.json`, collection `papers-baseline` |
@@ -229,10 +245,10 @@ Nếu sinh lại test set từ corrupted dataset thì ground truth cũng bị h�
 | Raw response/records     | `data/raw/`                          | Có | `crossref_response.json` + `crossref_records.json`, 24 record, fetch 2026-08-06 |
 | Cleaned dataset          | `data/clean/`                        | Có | `papers_clean.csv` + `papers_clean.json`, 24 row, 16 cột, `paper_id` unique |
 | Embedding manifest/index | `data/embeddings/`                   | Có | `papers_embeddings.json` + collection `papers-baseline` trong `data/chroma/`, 24 doc |
-| Evaluation set           | `data/eval/`                         | Thiếu | Chờ Role 5 |
-| Baseline metrics         | `data/results/baseline_metrics.json` | Thiếu | Chờ baseline chạy |
-| Quality/freshness        | `data/quality/`                      | Thiếu | Chờ Role 5 |
-| Baseline report          | `data/reports/phase1_report.md`      | Thiếu | Chờ Role 5 |
+| Evaluation set           | `data/eval/`                         | Có | `test_set.json`, 72 câu hỏi (24 paper × 3 loại) |
+| Baseline metrics         | `data/results/baseline_metrics.json` | Có | 72 sample — **đọc mục 11.2 trước khi dùng** |
+| Quality/freshness        | `data/quality/`                      | Có | `baseline_quality.json` (7 check, PASS) + `freshness_report.json` (fresh) |
+| Baseline report          | `data/reports/phase1_report.md`      | Thiếu | `reporting.py` còn `NotImplementedError` |
 | Pipeline spec            | `data/pipeline_spec.json`            | Có | Sinh bởi `script/export_pipeline_spec.py`, dump hằng số thật từ module Python |
 
 ### Baseline metrics
@@ -250,25 +266,45 @@ Số liệu từ `data/results/baseline_metrics.json`, 72 câu hỏi (24 paper �
 
 ## 8. Data quality và freshness
 
-⏳ Chờ Role 5 hoàn thiện `src/observability/quality.py`. Các check dự kiến và ngưỡng đã có sẵn tín hiệu từ clean schema:
+Kết quả thật từ `data/quality/baseline_quality.json`, 7 check, overall `PASS`.
 
-| Check        | Quality dimension | Ngưỡng/kỳ vọng | Kết quả baseline      | Bằng chứng |
-| ------------ | ----------------- | ------------------ | ----------------------- | ------------ |
-| Row count | Volume | > 0 | ⏳ | `data/quality/` |
-| `paper_id` not null và unique | Uniqueness/Completeness | 100% | ⏳ | `data/quality/` |
-| `title` not null | Completeness | 100% | ⏳ | `data/quality/` |
-| `summary_chars` đạt tối thiểu | Completeness | ≥ 40 | ⏳ | `data/quality/` |
-| `age_days` trong ngưỡng | Freshness | ≤ 180 ngày | ⏳ | `data/quality/freshness_report.json` |
+Một quality gate chỉ có giá trị nếu nó **fail được**. Nhóm audit bằng cách cho chính bộ check đó ăn corrupted dataset — check nào pass cả hai bên thì không phát hiện được gì. Tái chạy bằng `uv run python script/audit_quality_gate.py`.
+
+| Check        | Quality dimension | Ngưỡng/kỳ vọng | Baseline | Corrupted | Phát hiện được corruption? |
+| ------------ | ----------------- | ------------------ | ---- | ---- | ---- |
+| `row_count` | Volume | > 0 | PASS | PASS | Không |
+| `paper_id_not_null` | Completeness | 100% | PASS | PASS | Không |
+| `paper_id_unique` | Uniqueness | 100% | PASS | **FAIL** | **Có** |
+| `title_not_null` | Completeness | 100% | PASS | PASS | Không |
+| `summary_length` | Completeness | ≥ 40 ký tự | PASS | **FAIL** | **Có** |
+| `age_days_valid` | Validity | không null, không âm | PASS | PASS | Không |
+| `freshness` | Freshness | ≤ 180 ngày | PASS | **FAIL** | **Có** |
+| **Overall** | | | **PASS** | **FAIL** | **Có** |
+
+**Kết luận: quality gate phản ánh dữ liệu thật, không hard-code pass.** Overall lật từ PASS sang FAIL khi gặp corrupted data.
+
+Bốn check không phân biệt được thì không phải hỏng — chúng kiểm tra thứ mà corruption không đụng tới. Nhưng đối chiếu ngược từ 6 loại corruption sang check thì lộ ra khoảng trống thật:
+
+| Loại corruption | Check bắt được | Khoảng trống |
+| --- | --- | --- |
+| `duplicate_rows` | `paper_id_unique` | — |
+| `blank_summary` | `summary_length` | — |
+| `stale_published` | `freshness` | — |
+| `drop_latest_records` | **không có** | `row_count` chỉ check `> 0` nên mất record không bị phát hiện. Cần so số row với lần chạy trước hoặc với số raw record |
+| `truncate_title` | **không có** | `title_not_null` vẫn PASS vì title cắt ngắn vẫn khác rỗng. Cần check độ dài title tối thiểu |
+| `inject_noise` | **không có** | Không check nào nhìn vào phân bố ký tự của summary |
+
+Ba khoảng trống này quan trọng vì `drop_latest_records` và `truncate_title` chính là hai loại corruption gây hại nặng nhất cho agent, mà data quality report lại im lặng — đúng kiểu lỗi lọt tới người dùng trước khi bị phát hiện.
 
 ### Freshness
 
 | Thuộc tính               | Giá trị                           |
 | -------------------------- | ----------------------------------- |
 | Freshness được đo tại | Cleaned dataset, qua cột `age_days` |
-| Timestamp mới nhất       | ⏳ |
+| Timestamp mới nhất       | `2026-08-01` (oldest `2026-02-12`) |
 | Ngưỡng freshness         | 180 ngày (`freshness_threshold_days` trong `src/core/config.py`) |
-| Trạng thái baseline      | ⏳ |
-| Lý do                     | ⏳ |
+| Trạng thái baseline      | **Fresh** — `is_fresh: true`, 0/24 row stale, 0 row có date không parse được |
+| Lý do                     | Crossref filter `from-pub-date` đã cắt sẵn ở đúng ngưỡng 180 ngày, nên baseline không thể stale. Corrupted có 4–5 row stale sau `stale_published` |
 
 ## 9. Corruption scenarios và repair
 
