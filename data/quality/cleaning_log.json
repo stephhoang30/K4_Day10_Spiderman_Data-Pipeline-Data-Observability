@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-06T08:13:31.644317+00:00",
+  "generated_at": "2026-08-06T08:27:27.760081+00:00",
   "state": "baseline",
   "rows_in": 24,
   "rows_out": 24,
@@ -70,8 +70,8 @@
     }
   },
   "outputs": {
-    "csv": "/Users/stephhoang/Documents/VinUNI/K4_Day10_Spiderman_Data-Pipeline-Data-Observability/data/clean/papers_clean.csv",
-    "json": "/Users/stephhoang/Documents/VinUNI/K4_Day10_Spiderman_Data-Pipeline-Data-Observability/data/clean/papers_clean.json",
+    "csv": "F:\\AIIA\\K4_Day10_Spiderman_Data-Pipeline-Data-Observability\\data\\clean\\papers_clean.csv",
+    "json": "F:\\AIIA\\K4_Day10_Spiderman_Data-Pipeline-Data-Observability\\data\\clean\\papers_clean.json",
     "canonical": "json"
   }
 }
