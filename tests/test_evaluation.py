@@ -1,10 +1,10 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 
 from evaluation import metrics
 from evaluation.testset import build_test_set
-from retrieval.qa import AnswerResult
 
 
 def test_build_test_set_is_deterministic_and_skips_missing_fields(tmp_path: Path) -> None:
@@ -76,8 +76,18 @@ def test_structured_answer_metrics_are_field_aware() -> None:
 def test_evaluate_pipeline_reports_rank_and_error_type(monkeypatch, tmp_path: Path) -> None:
     answers = iter(
         [
-            AnswerResult("q1", "2024", ["doi-1"], ["context"], ["Paper 1"], [0.9]),
-            AnswerResult("q2", "wrong", ["doi-2", "doi-1"], ["context"], ["Paper 2", "Paper 1"], [0.8, 0.7]),
+            SimpleNamespace(
+                answer="2024",
+                retrieved_doc_ids=["doi-1"],
+                retrieved_contexts=["context"],
+                retrieved_scores=[0.9],
+            ),
+            SimpleNamespace(
+                answer="wrong",
+                retrieved_doc_ids=["doi-2", "doi-1"],
+                retrieved_contexts=["context"],
+                retrieved_scores=[0.8, 0.7],
+            ),
         ]
     )
     monkeypatch.setattr(metrics, "answer_question", lambda *args, **kwargs: next(answers))
