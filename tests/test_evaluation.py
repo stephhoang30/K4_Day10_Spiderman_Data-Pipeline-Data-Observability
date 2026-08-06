@@ -1,4 +1,3 @@
-from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -7,7 +6,7 @@ from evaluation import metrics
 from evaluation.testset import build_test_set
 
 
-def test_build_test_set_is_deterministic_and_skips_missing_fields(tmp_path: Path) -> None:
+def test_build_test_set_is_deterministic_and_skips_missing_fields(monkeypatch) -> None:
     dataframe = pd.DataFrame(
         [
             {
@@ -29,7 +28,9 @@ def test_build_test_set_is_deterministic_and_skips_missing_fields(tmp_path: Path
         ]
     )
 
-    output_path = tmp_path / "test_set.json"
+    written = {}
+    monkeypatch.setattr(testset, "write_json", lambda path, payload: written.update({"payload": payload}))
+    output_path = "test_set.json"
     samples = build_test_set(dataframe, output_path)
 
     assert [sample["id"] for sample in samples] == [
@@ -43,7 +44,7 @@ def test_build_test_set_is_deterministic_and_skips_missing_fields(tmp_path: Path
     ]
     assert all(sample["ground_truth_doc_ids"] for sample in samples)
     assert not any(sample["question_type"] == "authors" and "Second" in sample["question"] for sample in samples)
-    assert output_path.exists()
+    assert written["payload"] == samples
 
 
 def test_build_test_set_rejects_duplicate_or_missing_ids() -> None:
@@ -53,14 +54,14 @@ def test_build_test_set_rejects_duplicate_or_missing_ids() -> None:
     missing = pd.DataFrame([{"paper_id": pd.NA, "title": "Paper", "published": "2024"}])
 
     try:
-        build_test_set(duplicate, Path("unused.json"))
+        build_test_set(duplicate, "unused.json")
     except ValueError as error:
         assert "unique paper_id" in str(error)
     else:
         raise AssertionError("Duplicate paper IDs should be rejected")
 
     try:
-        build_test_set(missing, Path("unused.json"))
+        build_test_set(missing, "unused.json")
     except ValueError as error:
         assert "non-empty paper_id" in str(error)
     else:
@@ -73,7 +74,7 @@ def test_structured_answer_metrics_are_field_aware() -> None:
     assert metrics._answer_metric("categories", "biology, data", "biology") < 1.0
 
 
-def test_evaluate_pipeline_reports_rank_and_error_type(monkeypatch, tmp_path: Path) -> None:
+def test_evaluate_pipeline_reports_rank_and_error_type(monkeypatch) -> None:
     answers = iter(
         [
             SimpleNamespace(
@@ -94,14 +95,13 @@ def test_evaluate_pipeline_reports_rank_and_error_type(monkeypatch, tmp_path: Pa
     monkeypatch.delenv("RUN_LLM_JUDGE", raising=False)
     monkeypatch.delenv("RUN_RAGAS", raising=False)
 
-    test_set_path = tmp_path / "test_set.json"
-    metrics_path = tmp_path / "metrics.json"
-    answers_path = tmp_path / "answers.json"
-    test_set_path.write_text(
-        '[{"id":"qa-1","question_type":"date","question":"q1","ground_truth":"2024","ground_truth_doc_ids":["doi-1"]},'
-        '{"id":"qa-2","question_type":"date","question":"q2","ground_truth":"2024","ground_truth_doc_ids":["doi-1"]}]',
-        encoding="utf-8",
-    )
+    test_set = [
+        {"id": "qa-1", "question_type": "date", "question": "q1", "ground_truth": "2024", "ground_truth_doc_ids": ["doi-1"]},
+        {"id": "qa-2", "question_type": "date", "question": "q2", "ground_truth": "2024", "ground_truth_doc_ids": ["doi-1"]},
+    ]
+    written = {}
+    monkeypatch.setattr(metrics, "read_json", lambda path: test_set)
+    monkeypatch.setattr(metrics, "write_json", lambda path, payload: written.update({str(path): payload}))
 
     class SettingsStub:
         top_k = 2
@@ -109,9 +109,9 @@ def test_evaluate_pipeline_reports_rank_and_error_type(monkeypatch, tmp_path: Pa
     bundle = metrics.evaluate_pipeline(
         SettingsStub(),
         index=None,
-        test_set_path=test_set_path,
-        metrics_output_path=metrics_path,
-        answers_output_path=answers_path,
+        test_set_path="test_set.json",
+        metrics_output_path="metrics.json",
+        answers_output_path="answers.json",
         dataset_variant="corrupted",
     )
 
@@ -121,5 +121,5 @@ def test_evaluate_pipeline_reports_rank_and_error_type(monkeypatch, tmp_path: Pa
     assert bundle.answers[0]["error_type"] == "none"
     assert bundle.answers[1]["error_type"] == "answer_mismatch"
     assert bundle.answers[1]["retrieval_rank"] == 2
-    assert metrics_path.exists()
-    assert answers_path.exists()
+    assert "metrics.json" in written
+    assert "answers.json" in written
