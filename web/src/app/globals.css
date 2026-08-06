@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/*
+ * Light appearance only — no dark mode, no theme toggle.
+ * Palette is built around the VinUni logo: red #c72127, blue #134d8b.
+ * Blue carries structure and primary emphasis; red is reserved for
+ * corruption / failure / alert states only.
+ */
+@theme {
+  --color-brand-blue: #134d8b;
+  --color-brand-blue-700: #103f72;
+  --color-brand-blue-600: #17589e;
+  --color-brand-blue-200: #b9d0e7;
+  --color-brand-blue-100: #dbe8f4;
+  --color-brand-blue-50: #eff5fa;
+
+  --color-brand-red: #c72127;
+  --color-brand-red-700: #a01a1f;
+  --color-brand-red-200: #f3c3c5;
+  --color-brand-red-100: #f9dfe0;
+  --color-brand-red-50: #fdf1f1;
+
+  --color-surface: #ffffff;
+  --color-canvas: #f6f8fa;
+  --color-line: #dfe4ea;
+  --color-line-soft: #eceff3;
+
+  --color-ink: #16202c;
+  --color-ink-soft: #4a5764;
+  --color-ink-faint: #77828e;
+
+  --color-ok: #157347;
+  --color-ok-50: #eef7f2;
+  --color-ok-200: #bfe0cf;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  background-color: var(--color-canvas);
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* The page body must never scroll horizontally; wide content scrolls
+     inside its own container instead. */
+  overflow-x: hidden;
+}
+
+/* Keep long identifiers, URLs and paths from forcing the layout wider. */
+.break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Slim scrollbars for the horizontally scrolling table shells. */
+.scroll-shell {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-brand-blue-200) transparent;
+}
+.scroll-shell::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.scroll-shell::-webkit-scrollbar-thumb {
+  background-color: var(--color-brand-blue-200);
+  border-radius: 9999px;
+}
+.scroll-shell::-webkit-scrollbar-track {
+  background-color: transparent;
+}
