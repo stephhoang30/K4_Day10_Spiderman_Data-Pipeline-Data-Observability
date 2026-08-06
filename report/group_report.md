@@ -31,7 +31,9 @@ Môi trường đã dựng xong bằng `uv sync` trên Python 3.11.15 với toà
 
 Đã có bằng chứng sơ bộ trên sample dataset 13 record rằng corruption làm giảm chất lượng agent: retrieval hit rate 1.000 → 0.615 và số câu trả lời rỗng 0 → 7. Đây là số đo trên dữ liệu mẫu tổng hợp dùng để validate contract, **không phải** metrics của bài nộp; metrics chính thức phải lấy từ `data/results/` sau khi chạy pipeline thật trên dữ liệu Crossref.
 
-Blocker hiện tại: `src/evaluation/testset.py` và `src/observability/` (Role 5), `src/pipelines/` (Role 1) còn `NotImplementedError`, nên chưa chạy được end-to-end và chưa có artifact thật trong `data/`. `src/ingestion/crossref.py` (Role 2) đã xong nhưng snapshot raw đang commit chưa dùng được — xem mục 11.
+Ingestion và cleaning đã chạy thông trên dữ liệu Crossref thật: 24 record raw, 24 row clean, `paper_id` unique, không loại record nào. Artifact đã có trong `data/raw/`, `data/clean/` và `data/quality/cleaning_log.json`.
+
+Blocker hiện tại: `src/evaluation/testset.py` và `src/observability/` (Role 5), `src/pipelines/` (Role 1) còn `NotImplementedError`, nên chưa chạy được embedding, evaluation và report. Ngoài ra Crossref không trả `subject` cho bất kỳ record nào, làm loại câu hỏi `categories` của test set không dùng được — xem mục 12.
 
 ## 3. Kiến trúc và luồng dữ liệu
 
@@ -121,6 +123,7 @@ uv run python script/export_pipeline_spec.py
 | Baseline pipeline | Chưa chạy được — `src/pipelines/phase1.py` còn `NotImplementedError` | — | — |
 | Corruption flow   | Chưa chạy được — phụ thuộc baseline | — | — |
 | `validate_clean_contract.py` | Thành công — 29/29 check PASS | 2026-08-06 | Output stdout của script, không cần artifact ngoài |
+| Ingestion + cleaning (chạy trực tiếp `fetch_source_records` → `build_clean_dataframe` → `write_clean_artifacts`) | Thành công — 24 record raw, 24 row clean, loại 0 | 2026-08-06 | `data/raw/crossref_records.json`, `data/clean/papers_clean.json`, `data/quality/cleaning_log.json` |
 
 ## 5. Ingestion, cleaning và data contract
 
@@ -130,9 +133,9 @@ uv run python script/export_pipeline_spec.py
 | --------------------------- | ------------------------------------- |
 | Source                      | Crossref REST API — `https://api.crossref.org/works` |
 | Query/filter                | `query = agentic retrieval augmented generation large language model`; `filter = from-pub-date:<ngày chạy − 180 ngày>,has-abstract:true` |
-| Thời điểm lấy dữ liệu | ⏳ Chờ chạy ingestion |
-| Số record nhận được    | ⏳ Chờ chạy ingestion (trần cấu hình: 24) |
-| Cơ chế retry/backoff      | ⏳ Chờ Role 2 hoàn thiện `fetch_source_records` cho 429/503 |
+| Thời điểm lấy dữ liệu | 2026-08-06 (artifact `data/raw/crossref_response.json`) |
+| Số record nhận được    | 24/24 (đúng trần `max_results`); 24/24 có abstract, 24/24 có authors, **0/24 có `subject`** |
+| Cơ chế retry/backoff      | 3 lần thử, backoff `2**attempt` giây cho status 429/503, timeout 30s (`MAX_REQUEST_ATTEMPTS` trong `src/ingestion/crossref.py`) |
 
 ### Raw và clean schema
 
@@ -168,16 +171,18 @@ Toàn bộ 5 cột derived được tính lại bởi một hàm duy nhất `ref
 
 | Quy tắc                                 | Quality dimension liên quan | Số record bị tác động | Cách xác minh      |
 | ---------------------------------------- | ---------------------------- | -------------------------: | -------------------- |
-| Loại record thiếu `paper_id` | Completeness | ⏳ | `df.attrs["cleaning_rejects"]["missing_paper_id"]` |
-| Loại record có `title` ngắn hơn 10 ký tự | Validity | ⏳ | `cleaning_rejects["short_title"]` |
-| Loại record có `summary` ngắn hơn 40 ký tự | Completeness | ⏳ | `cleaning_rejects["short_summary"]` |
-| Loại record có `published` không parse được | Validity | ⏳ | `cleaning_rejects["unparsable_published"]` |
-| Dedupe theo `paper_id`, giữ bản đầu | Uniqueness | ⏳ | `cleaning_rejects["duplicate_paper_id"]` |
-| Dedupe theo `title` lowercase, giữ bản đầu | Uniqueness | ⏳ | `cleaning_rejects["duplicate_title"]` |
+| Loại record thiếu `paper_id` | Completeness | 0 | `rejects.missing_paper_id` trong `data/quality/cleaning_log.json` |
+| Loại record có `title` ngắn hơn 10 ký tự | Validity | 0 | `rejects.short_title` |
+| Loại record có `summary` ngắn hơn 40 ký tự | Completeness | 0 | `rejects.short_summary` |
+| Loại record có `published` không parse được | Validity | 0 | `rejects.unparsable_published` |
+| Dedupe theo `paper_id`, giữ bản đầu | Uniqueness | 0 | `rejects.duplicate_paper_id` |
+| Dedupe theo `title` lowercase, giữ bản đầu | Uniqueness | 0 | `rejects.duplicate_title` |
 | Strip tag JATS/HTML và unescape entity trong `title`/`summary` | Validity/Consistency | Áp dụng toàn bộ row | Check `summary` không còn ký tự `<` và `&amp;` trong `script/validate_clean_contract.py` |
 | Chuẩn hóa `authors`/`categories`: bỏ phần tử rỗng, dedupe case-insensitive, giữ thứ tự | Consistency | Áp dụng toàn bộ row | Check trong `script/validate_clean_contract.py` |
 
-Số record bị loại và lý do được ghi vào `df.attrs["cleaning_rejects"]` để Role 5 đưa thẳng vào data quality report thay vì đếm lại.
+Số record bị loại và lý do được ghi vào `df.attrs["cleaning_rejects"]` khi clean, rồi `write_clean_artifacts()` ghi ra `data/quality/cleaning_log.json` — vì `df.attrs` không sống sót qua vòng ghi file nên phải có artifact riêng thì mới truy vết được. Log này còn kèm khối `signals` (row count, unique `paper_id`, số ô rỗng, khoảng `summary_chars` và `age_days`, ngày mới/cũ nhất) để Role 5 dùng thẳng cho data quality report thay vì đếm lại.
+
+Lần chạy 2026-08-06 không loại record nào (24 vào, 24 ra). Khả năng truy vết của từng rule được kiểm chứng riêng bằng `script/validate_clean_contract.py`, trong đó có sample record cố tình vi phạm từng rule một.
 
 Giải thích cách nhóm tạo `text_for_embedding`, document ID và `age_days`:
 
@@ -208,8 +213,8 @@ Nếu sinh lại test set từ corrupted dataset thì ground truth cũng bị h�
 
 | Artifact                 | Đường dẫn thực tế                | Trạng thái | Ghi chú   |
 | ------------------------ | -------------------------------------- | ------------ | ---------- |
-| Raw response/records     | `data/raw/`                          | Thiếu | Chờ Role 2 |
-| Cleaned dataset          | `data/clean/`                        | Thiếu | Code cleaning đã xong, chờ input từ ingestion |
+| Raw response/records     | `data/raw/`                          | Có | `crossref_response.json` + `crossref_records.json`, 24 record, fetch 2026-08-06 |
+| Cleaned dataset          | `data/clean/`                        | Có | `papers_clean.csv` + `papers_clean.json`, 24 row, 16 cột, `paper_id` unique |
 | Embedding manifest/index | `data/embeddings/`                   | Thiếu | Chờ baseline chạy |
 | Evaluation set           | `data/eval/`                         | Thiếu | Chờ Role 5 |
 | Baseline metrics         | `data/results/baseline_metrics.json` | Thiếu | Chờ baseline chạy |
@@ -310,7 +315,8 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 - **Triệu chứng:** Ghép ingestion (Role 2) với cleaning (Role 3) trên snapshot `data/raw/raw.json` đang commit: `parse_crossref_payload` nhận 20 item nhưng trả về 0 `PaperRecord`, kéo theo cleaned dataset rỗng và toàn bộ pipeline phía sau không có gì để chạy.
 - **Nguyên nhân:** 0/20 item trong snapshot có field `abstract`, trong khi `parse_crossref_payload` bắt buộc `paper_id`, `title` và `summary` đều không rỗng. Snapshot này được lấy về mà không kèm filter `has-abstract:true` — bằng chứng là item đầu tiên là *"Soziale Innovation"*, một chương sách tiếng Đức không liên quan tới `source_query` đã cấu hình. Ngoài ra 0/20 item có field `subject` nên `categories` cũng sẽ rỗng toàn bộ.
 - **Cách xử lý:** Hàm `fetch_source_records` bản thân đã truyền đúng `settings.source_filter`, nên chỉ cần chạy lại nó để sinh `data/raw/crossref_response.json` và `data/raw/crossref_records.json` theo đúng đường dẫn pipeline, thay vì dùng `data/raw/raw.json`. Lưu ý `data/raw/raw.json` không nằm trong `Paths` nên không có bước nào của pipeline đọc file này.
-- **Cách xác minh:** Chạy `uv run python script/run_phase1.py` rồi kiểm tra số record trong `data/raw/crossref_records.json` lớn hơn 0 và `df.attrs["cleaning_rejects"]` không loại toàn bộ row. Trước khi có dữ liệu thật, contract cleaning/corruption vẫn được bảo vệ bởi `script/validate_clean_contract.py`.
+- **Cách xác minh:** Đã chạy lại `fetch_source_records(settings)` ngày 2026-08-06. Kết quả: **24/24 item có abstract**, parse ra đủ 24 `PaperRecord`, cleaning giữ nguyên 24 row và không loại record nào. Artifact đúng đường dẫn pipeline đã có trong `data/raw/`. **Vấn đề đã được xử lý** — code ingestion không sai, chỉ có snapshot `raw.json` là lấy sai tham số.
+- **Phát hiện kèm theo:** Cùng lần chạy đó cho thấy **0/24 record có field `subject`**, nên `categories` và `categories_joined` rỗng toàn bộ. Xem mục 12.
 
 ### 11.2 ragas import module đã bị gỡ khỏi langchain-community
 
@@ -325,7 +331,8 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 
 | Giới hạn hiện tại | Ảnh hưởng   | Hướng cải thiện có thể kiểm chứng |
 | --------------------- | -------------- | ----------------------------------------- |
-| `authors` và `categories` là `list[str]`; ghi ra CSV sẽ bị stringify | Đọc lại từ `papers_clean.csv` sẽ ra chuỗi thay vì list | Luôn đọc lại từ bản JSON; hoặc thêm bước parse khi load CSV và assert kiểu trong quality check |
+| **Crossref không trả `subject`: 0/24 record có categories** | `categories_joined` rỗng toàn bộ, dòng `Categories:` trong `text_for_embedding` trống. Loại câu hỏi `categories` của test set sẽ có ground truth rỗng nên không chấm được | Role 5 bỏ `categories` khỏi `question_type` và bù bằng loại câu hỏi khác (ví dụ publisher, lấy từ cột `comment`); hoặc lấy categories từ `container-title`. Xác minh bằng `empty_categories` trong `data/quality/cleaning_log.json` |
+| `authors` và `categories` là `list[str]`; ghi ra CSV sẽ bị stringify | Đọc lại từ `papers_clean.csv` sẽ ra chuỗi thay vì list | Luôn đọc lại từ bản JSON (`outputs.canonical` trong cleaning log ghi rõ `json`); hoặc thêm bước parse khi load CSV và assert kiểu trong quality check |
 | Corpus chỉ 24 record (`max_results`) | Mỗi record bị corrupt chiếm tỉ trọng lớn, metrics dao động mạnh | Tăng `max_results` và chạy lại, so sánh biên độ dao động của `retrieval_hit_rate` giữa hai kích thước corpus |
 | Corruption dùng seed cố định | Kết luận chỉ đúng cho một cấu hình row bị tác động | Chạy lại với vài seed khác nhau, báo cáo khoảng dao động của metrics thay vì một điểm |
 | LLM judge phụ thuộc API ngoài | Khi API lỗi, `_judge_answer` rơi về heuristic token F1 và điểm judge không so sánh được giữa các lần chạy | Ghi lại trong metrics số lần rơi vào fallback; loại các lần chạy có fallback khỏi bảng so sánh |
