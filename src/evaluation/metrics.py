@@ -6,17 +6,23 @@ import os
 import re
 import sys
 import types
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from datasets import Dataset
 from pydantic import BaseModel, Field
 
 from core.config import Settings
 from core.utils import normalize_whitespace, read_json, write_json
-from retrieval.embeddings import MiniLMEmbeddings
-from retrieval.index import LocalEmbeddingIndex
-from retrieval.llm import build_llm
-from retrieval.qa import answer_question
+
+if TYPE_CHECKING:
+    from retrieval.index import LocalEmbeddingIndex
+
+
+def answer_question(question: str, settings: Settings, index, top_k: int | None = None):
+    """Load QA dependencies only when a pipeline evaluation actually runs."""
+    from retrieval.qa import answer_question as answer_question_impl
+
+    return answer_question_impl(question, settings=settings, index=index, top_k=top_k)
 
 
 class JudgeVerdict(BaseModel):
@@ -126,6 +132,8 @@ Return:
 - short reasoning
 """.strip()
     try:
+        from retrieval.llm import build_llm
+
         llm = build_llm(settings=settings, temperature=0.0).with_structured_output(JudgeVerdict)
         return llm.invoke(prompt)
     except Exception:
@@ -147,6 +155,7 @@ def _run_ragas(settings: Settings, answers: list[dict[str, Any]]) -> dict[str, A
             sys.modules["langchain_community.chat_models.vertexai"] = shim
         from ragas import evaluate
         from ragas.metrics import answer_relevancy, context_precision, context_recall, faithfulness
+        from retrieval.embeddings import MiniLMEmbeddings
 
         dataset = Dataset.from_dict(
             {
