@@ -480,5 +480,5 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 - [x] Bảng metrics khớp với các file trong `data/results/`.
 - [x] Quality/freshness conclusions khớp với `data/quality/`.
 - [x] Các đường dẫn báo cáo và artifact truy cập được.
-- [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng — `report/individual_report.md` còn trống.
+- [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng — Role 3 xong (`report/individual_report_hoang_cong_thanh.md`), 4 thành viên còn lại chưa nộp.
 - [x] Không có `.env`, API key, token hoặc secret trong source, report, log hay ảnh — đã quét cả working tree lẫn toàn bộ lịch sử git (`sk-proj-`, `AIzaSy`, `ghp_`: 0 kết quả); `.env` chưa từng được commit và đang bị `.gitignore` chặn.
