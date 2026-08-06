@@ -47,7 +47,7 @@ import {
   type MeterRow,
 } from "@/components/charts";
 import { Clamp, Column, DataTable } from "@/components/data-table";
-import { DamageBars } from "@/components/diagrams";
+import { AnswerGrid, DamageBars, type VerdictRun } from "@/components/diagrams";
 import { GenericJson } from "@/components/generic-json";
 import { Markdown } from "@/components/markdown";
 import {
@@ -132,6 +132,26 @@ export default function ComparePage() {
         )
       : null;
 
+  // one row per run, one cell per question, in a stable id order
+  const verdictRuns: VerdictRun[] = (
+    [
+      ["baseline", baselineAnswers],
+      ["corrupted", corruptedAnswers],
+      ["repaired", repairedAnswers],
+    ] as const
+  ).flatMap(([state, entry]) =>
+    entry.status === "ok"
+      ? [
+          {
+            state,
+            correct: [...entry.data]
+              .sort((a, b) => (a.id ?? "").localeCompare(b.id ?? ""))
+              .map((row) => row.judge?.correct === true),
+          },
+        ]
+      : [],
+  );
+
   const silentFailure =
     baselineAnswers.status === "ok" &&
     corruptedAnswers.status === "ok" &&
@@ -173,6 +193,20 @@ export default function ComparePage() {
           />
         ))}
       </div>
+
+      <Section
+        title="Từng câu hỏi một, ba lần chạy"
+        subtitle="Cùng một bộ câu hỏi, xếp theo cùng thứ tự ở cả ba hàng. Chỗ thủng ở hàng giữa chính là số câu hỏi mà corruption làm hỏng."
+      >
+        {verdictRuns.length > 0 ? (
+          <AnswerGrid runs={verdictRuns} />
+        ) : (
+          <PendingBlock
+            states={[baselineAnswers, corruptedAnswers, repairedAnswers]}
+            label="data/results/*_answers.json"
+          />
+        )}
+      </Section>
 
       <VerdictRow reports={reports} quality={quality} />
 

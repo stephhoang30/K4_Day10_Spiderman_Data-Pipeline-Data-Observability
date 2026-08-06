@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { ContractGraph, Detectability, ImpactGroup } from "@/lib/derive";
 import { formatInt, formatMetric } from "@/lib/format";
-import type { CorruptionAction } from "@/lib/types";
+import type { CorruptionAction, RunState } from "@/lib/types";
 
 /**
  * Hand-drawn inline SVG. No chart or diagram library, no external asset.
@@ -33,25 +33,35 @@ function Frame({
   viewBox,
   minWidth,
   label,
+  caption,
   children,
 }: {
   viewBox: string;
   minWidth: number;
   label: string;
+  /** explanatory line, rendered as HTML under the drawing so it can wrap */
+  caption?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <div className="scroll-shell overflow-x-auto">
-      <svg
-        viewBox={viewBox}
-        role="img"
-        aria-label={label}
-        preserveAspectRatio="xMidYMid meet"
-        style={{ width: "100%", minWidth, height: "auto", display: "block" }}
-      >
-        {children}
-      </svg>
-    </div>
+    <figure className="m-0 flex flex-col gap-2">
+      <div className="scroll-shell overflow-x-auto">
+        <svg
+          viewBox={viewBox}
+          role="img"
+          aria-label={label}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ width: "100%", minWidth, height: "auto", display: "block" }}
+        >
+          {children}
+        </svg>
+      </div>
+      {caption ? (
+        <figcaption className="text-base leading-relaxed text-ink-faint">
+          {caption}
+        </figcaption>
+      ) : null}
+    </figure>
   );
 }
 
@@ -251,7 +261,7 @@ export function DamageBars({
   const left = 250;
   const right = 1000;
   const width = right - left;
-  const height = top + rows.length * rowH + 56;
+  const height = top + rows.length * rowH + 16;
   // value labels live in the gutter to the right of the axis, badges beyond it,
   // so a full-length bar never pushes its own label off the drawing
   const badgeX = 1096;
@@ -261,6 +271,7 @@ export function DamageBars({
       viewBox={`0 0 1280 ${height}`}
       minWidth={900}
       label="Biểu đồ token F1 còn lại của từng nhóm câu hỏi, xếp theo mức thiệt hại"
+      caption="Thanh nhạt là phần chất lượng đã mất. Nhóm “không bị đụng” là nhóm đối chứng — vẫn hoàn hảo."
     >
       {/* axis */}
       <line x1={left} y1={top - 14} x2={left} y2={top + rows.length * rowH} stroke={LINE} strokeWidth={1} />
@@ -333,16 +344,110 @@ export function DamageBars({
         );
       })}
 
-      <text x={left} y={height - 22} fontSize={14} fill={INK_FAINT}>
-        Thanh nhạt là phần chất lượng đã mất. Nhóm &ldquo;không bị đụng&rdquo; là nhóm đối
-        chứng — vẫn hoàn hảo.
-      </text>
     </Frame>
   );
 }
 
 /* ========================================================================== */
-/* 3 · The observability gap                                                  */
+/* 3 · Every question, every run                                              */
+/* ========================================================================== */
+
+export interface VerdictRun {
+  state: RunState;
+  /** one entry per question, in a stable order, true when the judge said correct */
+  correct: boolean[];
+}
+
+/**
+ * One cell per question, one row per run.
+ *
+ * Filled in the run's own colour = the judge marked it correct. Hollow with a
+ * red slash = wrong. The corrupted row reads as a row full of holes, and the
+ * repaired row fills straight back in.
+ */
+export function AnswerGrid({ runs }: { runs: VerdictRun[] }) {
+  const columns = Math.max(...runs.map((run) => run.correct.length), 0);
+  if (columns === 0) return null;
+
+  const labelW = 180;
+  const pitch = 16;
+  const cell = 13;
+  const rowPitch = 52;
+  const width = labelW + columns * pitch + 60;
+  const height = 44 + runs.length * rowPitch;
+
+  const fillOf: Record<RunState, string> = {
+    baseline: BLUE,
+    corrupted: RED,
+    repaired: GREEN,
+  };
+
+  return (
+    <Frame
+      viewBox={`0 0 ${width} ${height}`}
+      minWidth={Math.min(width, 1000)}
+      label="Lưới kết quả: mỗi ô là một câu hỏi, mỗi hàng là một lần chạy"
+      caption="Ô đặc = LLM judge chấm đúng. Ô rỗng có gạch đỏ = chấm sai. Thứ tự câu hỏi giống nhau ở cả ba hàng."
+    >
+      {runs.map((run, rowIndex) => {
+        const y = 34 + rowIndex * rowPitch;
+        const wrong = run.correct.filter((value) => !value).length;
+        return (
+          <g key={run.state}>
+            <rect x={0} y={y - 2} width={14} height={14} rx={3} fill={fillOf[run.state]} />
+            <text x={24} y={y + 11} fontSize={19} fontWeight={700} fill={INK}>
+              {run.state}
+            </text>
+            <text x={24} y={y + 32} fontSize={14} fill={wrong > 0 ? RED : INK_FAINT}>
+              {wrong > 0
+                ? `${formatInt(wrong)}/${formatInt(run.correct.length)} sai`
+                : `${formatInt(run.correct.length)}/${formatInt(run.correct.length)} đúng`}
+            </text>
+
+            {run.correct.map((ok, index) => {
+              const x = labelW + index * pitch;
+              return ok ? (
+                <rect
+                  key={index}
+                  x={x}
+                  y={y}
+                  width={cell}
+                  height={cell * 2}
+                  rx={3}
+                  fill={fillOf[run.state]}
+                />
+              ) : (
+                <g key={index}>
+                  <rect
+                    x={x}
+                    y={y}
+                    width={cell}
+                    height={cell * 2}
+                    rx={3}
+                    fill={SURFACE}
+                    stroke={RED}
+                    strokeWidth={1.5}
+                  />
+                  <line
+                    x1={x + 2}
+                    y1={y + cell * 2 - 2}
+                    x2={x + cell - 2}
+                    y2={y + 2}
+                    stroke={RED}
+                    strokeWidth={1.5}
+                  />
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+    </Frame>
+  );
+}
+
+/* ========================================================================== */
+/* 4 · The observability gap                                                  */
 /* ========================================================================== */
 
 export function ObservabilityGap({
@@ -354,7 +459,7 @@ export function ObservabilityGap({
 }) {
   const rowH = 62;
   const rows = Math.max(items.length, checks.length);
-  const height = 70 + rows * rowH + 40;
+  const height = 70 + rows * rowH + 10;
   const leftX = 20;
   const leftW = 300;
   const rightX = 800;
@@ -368,7 +473,8 @@ export function ObservabilityGap({
     <Frame
       viewBox={`0 0 1180 ${height}`}
       minWidth={920}
-      label="Sơ đồ nối sáu dạng corruption với các quality check bắt được chúng"
+      label="Sơ đồ nối từng dạng corruption với các quality check bắt được chúng"
+      caption="Đường xanh lá = check đã bắt được dạng lỗi đó. Khoảng trống bên phải các nút đỏ chính là vùng mù của observability."
     >
       <text x={leftX} y={34} fontSize={19} fill={RED} fontWeight={700}>
         Dạng lỗi đã xảy ra
@@ -408,7 +514,17 @@ export function ObservabilityGap({
                 stroke={RED}
                 strokeWidth={3}
               />
-              <text x={leftX + leftW + 182} y={y + 6} fontSize={16} fill={RED} fontWeight={650}>
+              {/* halo keeps the label readable where it crosses a connector */}
+              <text
+                x={leftX + leftW + 182}
+                y={y + 6}
+                fontSize={16}
+                fill={RED}
+                fontWeight={650}
+                stroke={SURFACE}
+                strokeWidth={5}
+                paintOrder="stroke"
+              >
                 không nối tới check nào
               </text>
             </g>
@@ -506,10 +622,6 @@ export function ObservabilityGap({
         );
       })}
 
-      <text x={leftX} y={height - 14} fontSize={14} fill={INK_FAINT}>
-        Đường xanh lá = check đã bắt được dạng lỗi đó. Khoảng trống bên phải các nút đỏ chính
-        là vùng mù của observability.
-      </text>
     </Frame>
   );
 }
@@ -650,13 +762,14 @@ export function MonthlyColumns({
   const colW = 74;
   const plotH = 190;
   const width = Math.max(data.length * colW + 90, 560);
-  const height = plotH + 96;
+  const height = plotH + 62;
 
   return (
     <Frame
       viewBox={`0 0 ${width} ${height}`}
       minWidth={Math.min(width, 620)}
       label="Số paper theo tháng xuất bản"
+      caption={caption}
     >
       {/* baseline */}
       <line x1={60} y1={plotH + 20} x2={width - 20} y2={plotH + 20} stroke={LINE} strokeWidth={1} />
@@ -697,11 +810,6 @@ export function MonthlyColumns({
         );
       })}
 
-      {caption ? (
-        <text x={60} y={height - 12} fontSize={14} fill={INK_FAINT}>
-          {caption}
-        </text>
-      ) : null}
     </Frame>
   );
 }
@@ -713,7 +821,7 @@ export function MonthlyColumns({
 export function ContractDiagram({ graph }: { graph: ContractGraph }) {
   const rowH = 34;
   const rows = Math.max(graph.sources.length, graph.derived.length * 2);
-  const height = 76 + rows * rowH + 40;
+  const height = 76 + rows * rowH + 16;
 
   const srcX = 20;
   const srcW = 260;
@@ -757,6 +865,22 @@ export function ContractDiagram({ graph }: { graph: ContractGraph }) {
       viewBox={`0 0 1180 ${height}`}
       minWidth={920}
       label="Sơ đồ contract: cột nguồn sinh ra cột derived, và ai đọc cột nào"
+      caption={
+        <>
+          Xanh dương: cột nguồn → cột derived → model embedding. Xanh lá: cột đang có quality
+          check theo dõi. Cột không có đường nối nào là cột không ai nhìn.
+          {graph.datasetChecks.length > 0 ? (
+            <>
+              {" "}
+              Check chạy trên cả dataset:{" "}
+              <span className="font-mono">
+                {graph.datasetChecks.map((item) => item.check).join(", ")}
+              </span>
+              .
+            </>
+          ) : null}
+        </>
+      }
     >
       <text x={srcX} y={34} fontSize={19} fill={INK_SOFT} fontWeight={700}>
         {graph.sources.length} cột từ source
@@ -897,13 +1021,6 @@ export function ContractDiagram({ graph }: { graph: ContractGraph }) {
         </g>
       ))}
 
-      <text x={srcX} y={height - 14} fontSize={14} fill={INK_FAINT}>
-        Xanh dương: cột nguồn → cột derived → model embedding. Xanh lá: cột đang có quality
-        check theo dõi. Cột không có đường nối nào là cột không ai nhìn.
-        {graph.datasetChecks.length > 0
-          ? ` Check chạy trên cả dataset: ${graph.datasetChecks.map((item) => item.check).join(", ")}.`
-          : ""}
-      </text>
     </Frame>
   );
 }
