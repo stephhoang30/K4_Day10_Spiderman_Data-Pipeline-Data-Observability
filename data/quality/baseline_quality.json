@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-06T08:59:39.096965+00:00",
+  "generated_at": "2026-08-06T09:52:06.944924+00:00",
   "report_name": "baseline",
   "status": "PASS",
   "passed": true,
@@ -81,7 +81,7 @@
     }
   },
   "freshness": {
-    "generated_at": "2026-08-06T08:59:39.096949+00:00",
+    "generated_at": "2026-08-06T09:52:06.944894+00:00",
     "latest_published": "2026-08-01",
     "oldest_published": "2026-02-12",
     "stale_rows": 0,

@@ -157,6 +157,7 @@ def _run_ragas(settings: Settings, answers: list[dict[str, Any]]) -> dict[str, A
             sys.modules["langchain_community.chat_models.vertexai"] = shim
         from ragas import evaluate
         from ragas.metrics import answer_relevancy, context_precision, context_recall, faithfulness
+        from ragas.run_config import RunConfig
         from retrieval.embeddings import MiniLMEmbeddings
 
         dataset = Dataset.from_dict(
@@ -172,8 +173,9 @@ def _run_ragas(settings: Settings, answers: list[dict[str, Any]]) -> dict[str, A
             metrics=[answer_relevancy, context_precision, context_recall, faithfulness],
             llm=build_llm(settings=settings, temperature=0.0),
             embeddings=MiniLMEmbeddings(settings.embedding_model),
+            run_config=RunConfig(max_workers=2, max_retries=3, max_wait=60),
         )
-        return dict(result)
+        return dict(result._repr_dict)
     except Exception as exc:  # pragma: no cover
         return {"error": f"Ragas evaluation failed: {exc}"}
 

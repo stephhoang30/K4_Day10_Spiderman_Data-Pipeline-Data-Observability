@@ -9,7 +9,7 @@
 | filter | from-pub-date:2026-02-07,has-abstract:true |
 | raw_records | 24 |
 | clean_records | 24 |
-| run_at | 2026-08-06T08:59:29.084438+00:00 |
+| run_at | 2026-08-06T09:43:21.858012+00:00 |
 
 ## Evaluation metrics
 
