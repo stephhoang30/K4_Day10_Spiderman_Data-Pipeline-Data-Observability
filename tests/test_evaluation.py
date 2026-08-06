@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 
-from evaluation import metrics
+from evaluation import metrics, testset
 from evaluation.testset import build_test_set
 
 
