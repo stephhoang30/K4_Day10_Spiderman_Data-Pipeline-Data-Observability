@@ -1,0 +1,76 @@
+/**
+ * Which logical artifacts belong to which pipeline stage.
+ *
+ * This is *structure*, not data: the artifact names are keys into
+ * `pipeline_spec.artifacts`, and every path, description and command is read
+ * from the spec / filesystem at request time. Nothing here duplicates a value
+ * the Python side owns.
+ *
+ * `compare` is not a key in `pipeline_spec.stages` — it is the FE's roll-up
+ * view over the three metrics files plus the comparison report, and is flagged
+ * as derived so the UI can label it honestly.
+ */
+
+export const STAGE_ORDER = [
+  "crawl",
+  "clean",
+  "index",
+  "evaluate",
+  "observe",
+  "corrupt",
+  "repair",
+  "compare",
+] as const;
+
+export const STAGE_ARTIFACTS: Record<string, string[]> = {
+  crawl: ["raw_api_response", "raw_records"],
+  clean: ["clean_json", "clean_csv"],
+  index: ["embeddings"],
+  evaluate: ["test_set", "baseline_metrics", "baseline_answers"],
+  observe: ["freshness_report", "baseline_report"],
+  corrupt: [
+    "corrupted_json",
+    "corrupted_embeddings",
+    "corruption_log",
+    "corrupted_metrics",
+    "corrupted_answers",
+  ],
+  repair: [
+    "repaired_json",
+    "repaired_embeddings",
+    "repaired_metrics",
+    "repaired_answers",
+  ],
+  compare: [
+    "baseline_metrics",
+    "corrupted_metrics",
+    "repaired_metrics",
+    "comparison_report",
+  ],
+};
+
+/** Stages that exist only as a FE view, with no entry in pipeline_spec.stages. */
+export const DERIVED_STAGES = new Set<string>(["compare"]);
+
+/** Which detail page, if any, explains a stage. */
+export const STAGE_ROUTE: Record<string, string> = {
+  crawl: "/crawl",
+  clean: "/clean",
+  corrupt: "/corrupt",
+  repair: "/corrupt",
+  compare: "/compare",
+};
+
+/**
+ * Order the stage keys: spec order first (so new Python stages show up
+ * automatically), then any FE-derived stages.
+ */
+export function orderedStages(specStageKeys: string[]): string[] {
+  const known = STAGE_ORDER.filter(
+    (stage) => specStageKeys.includes(stage) || DERIVED_STAGES.has(stage),
+  );
+  const extras = specStageKeys.filter(
+    (stage) => !(STAGE_ORDER as readonly string[]).includes(stage),
+  );
+  return [...known, ...extras];
+}

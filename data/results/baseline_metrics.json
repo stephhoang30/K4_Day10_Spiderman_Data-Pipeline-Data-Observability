@@ -1,0 +1,52 @@
+{
+  "dataset_variant": "baseline",
+  "samples": 72,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall_at_1": 1.0,
+  "retrieval_recall_at_k": 1.0,
+  "retrieval_mrr": 1.0,
+  "mean_top_score": 1.0,
+  "mean_token_f1": 1.0,
+  "answer_accuracy": 1.0,
+  "mean_answer_metric": 1.0,
+  "judge_accuracy": 1.0,
+  "mean_judge_score": 5,
+  "by_question_type": {
+    "authors": {
+      "samples": 24,
+      "retrieval_recall_at_1": 1.0,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_mrr": 1.0,
+      "mean_top_score": 1.0,
+      "answer_accuracy": 1.0,
+      "mean_answer_metric": 1.0,
+      "judge_accuracy": 1.0,
+      "mean_judge_score": 5
+    },
+    "date": {
+      "samples": 24,
+      "retrieval_recall_at_1": 1.0,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_mrr": 1.0,
+      "mean_top_score": 1.0,
+      "answer_accuracy": 1.0,
+      "mean_answer_metric": 1.0,
+      "judge_accuracy": 1.0,
+      "mean_judge_score": 5
+    },
+    "summary": {
+      "samples": 24,
+      "retrieval_recall_at_1": 1.0,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_mrr": 1.0,
+      "mean_top_score": 1.0,
+      "answer_accuracy": 1.0,
+      "mean_answer_metric": 1.0,
+      "judge_accuracy": 1.0,
+      "mean_judge_score": 5
+    }
+  },
+  "ragas": {
+    "skipped": "Set RUN_RAGAS=1 to enable the slower Ragas pass."
+  }
+}
