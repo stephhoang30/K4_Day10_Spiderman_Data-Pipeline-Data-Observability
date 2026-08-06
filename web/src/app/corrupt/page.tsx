@@ -1,190 +1,479 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState } from "react";
-import { getCleanDataset, getCorruptionLog, getPipelineSpec } from "@/lib/api";
+import {
+  getCleanDataset,
+  getCorruptionLog,
+  getPipelineSpec,
+  getQuality,
+} from "@/lib/api";
+import {
+  auditGate,
+  byState,
+  describeCheckValue,
+  driftedChecks,
+  passLabelOf,
+  readQualityReports,
+  type Detectability,
+  type DriftedCheck,
+  type QualityReport,
+} from "@/lib/derive";
 import { formatFraction, formatInt, formatTimestamp } from "@/lib/format";
 import { useArtifact } from "@/lib/use-artifact";
-import type {
-  CorruptionAction,
-  CorruptionLog,
-  CorruptionSpec,
-  DatasetState,
+import {
+  RUN_STATES,
+  type CorruptionAction,
+  type CorruptionLog,
+  type CorruptionSpec,
+  type DatasetState,
+  type PipelineSpec,
 } from "@/lib/types";
 import { ArtifactBoundary } from "@/components/artifact-state";
+import { BeforeAfter, Isotype, SERIES, Verdict } from "@/components/charts";
 import { CleanRowsTable } from "@/components/clean-rows-table";
+import { CorruptionRowDiagram, ObservabilityGap } from "@/components/diagrams";
 import { Column, DataTable } from "@/components/data-table";
 import {
   Badge,
   Collapsible,
+  DetailDrawer,
   KeyValueList,
   Mono,
-  Note,
   PageHeading,
   PageShell,
-  Panel,
+  ScrollShell,
+  Section,
   StatTile,
+  Takeaway,
 } from "@/components/ui";
 
-const DATASET_TABS: { state: Exclude<DatasetState, "clean">; label: string; artifact: string }[] =
-  [
-    { state: "corrupted", label: "Corrupted", artifact: "data/clean/papers_clean_corrupted.json" },
-    { state: "repaired", label: "Repaired", artifact: "data/clean/papers_clean_repaired.json" },
-  ];
+const DATASET_TABS: { state: Exclude<DatasetState, "clean">; label: string }[] = [
+  { state: "corrupted", label: "Corrupted" },
+  { state: "repaired", label: "Repaired" },
+];
 
 export default function CorruptPage() {
   const spec = useArtifact(getPipelineSpec);
   const log = useArtifact(getCorruptionLog);
+  const quality = useArtifact(getQuality);
+  const corruptedRows = useArtifact(useCallback(() => getCleanDataset("corrupted"), []));
 
   const [dataset, setDataset] = useState<Exclude<DatasetState, "clean">>("corrupted");
   const rows = useArtifact(useCallback(() => getCleanDataset(dataset), [dataset]));
+
+  const reports: Map<string, QualityReport> =
+    quality.status === "ok"
+      ? byState(readQualityReports(quality.data))
+      : new Map<string, QualityReport>();
+
+  const gate =
+    log.status === "ok" && corruptedRows.status === "ok" && reports.get("corrupted")
+      ? auditGate({
+          log: log.data,
+          corruptedRows: corruptedRows.data,
+          report: reports.get("corrupted")!,
+          minSummaryChars:
+            spec.status === "ok" ? spec.data.clean_contract.min_summary_chars : null,
+          freshnessThresholdDays:
+            spec.status === "ok" ? spec.data.freshness.threshold_days : null,
+        })
+      : null;
+
+  const baselineReport = reports.get("baseline");
+  const corruptedReport = reports.get("corrupted");
+  const drift =
+    baselineReport && corruptedReport
+      ? driftedChecks(baselineReport, corruptedReport)
+      : null;
+
+  const gateByType = new Map((gate?.items ?? []).map((item) => [item.type, item]));
+  const declaredByType = new Map(
+    (spec.status === "ok" ? spec.data.corruption_spec.kinds : []).map(
+      (kind) => [kind.type, kind] as const,
+    ),
+  );
 
   return (
     <PageShell>
       <PageHeading
         eyebrow="Stage 6 · corrupt"
-        title="Data bị làm xấu như nào"
-        lede="Sáu dạng lỗi được cố ý bơm vào dataset sạch, mỗi dạng nhắm vào một trụ observability khác nhau. Toàn bộ được seed cố định để lần chạy nào cũng cho ra cùng một bộ dữ liệu hỏng."
+        title="Sáu cách làm hỏng dữ liệu"
+        lede="Mỗi dạng lỗi nhắm vào một trụ observability khác nhau, seed cố định nên lần chạy nào cũng hỏng y hệt."
       />
 
-      <Panel
-        title="Corruption spec"
-        subtitle={
-          <>
-            Từ <Mono>pipeline_spec.corruption_spec</Mono>. Đây là ý định khai báo; phần
-            thực sự đã xảy ra nằm ở <Mono>corruption_log.json</Mono> bên dưới.
-          </>
-        }
-        tone="alert"
-      >
-        <ArtifactBoundary state={spec} label="pipeline_spec.json">
-          {(data) => <CorruptionSpecView spec={data.corruption_spec} />}
-        </ArtifactBoundary>
-      </Panel>
+      <ArtifactBoundary state={log} label="corruption_log.json">
+        {(data) => <LossHeadline log={data} />}
+      </ArtifactBoundary>
 
-      <Panel
-        title="Corruption log"
-        subtitle={
-          <>
-            Từ <Mono>data/results/corruption_log.json</Mono> — số dòng và paper_id thật sự
-            bị tác động.
-          </>
-        }
+      <Section
+        title="Mỗi dạng lỗi biến đổi một record như thế nào"
+        subtitle="Bên trái là một record nguyên vẹn, bên phải là chính nó sau khi bị làm hỏng — chỉ trường bị đụng vào mới chuyển sang đỏ. Mỗi ô vuông là một dòng thật bị tác động; ô nét đứt nghĩa là dòng đó đã bị xoá hẳn."
         tone="alert"
-        aside={
-          log.status === "ok" ? (
-            <Badge tone="red">seed {log.data.seed}</Badge>
-          ) : null
-        }
       >
         <ArtifactBoundary state={log} label="corruption_log.json">
           {(data) => (
-            <CorruptionLogView
-              log={data}
-              spec={spec.status === "ok" ? spec.data.corruption_spec : null}
-            />
+            <ul className="grid gap-5 xl:grid-cols-2">
+              {[...(data.actions ?? [])]
+                .sort((a, b) => (b.rows_affected ?? 0) - (a.rows_affected ?? 0))
+                .map((action, index) => (
+                  <li
+                    key={action.type}
+                    className="flex flex-col gap-3 rounded-2xl border-2 border-brand-red-200 bg-brand-red-50/30 p-5"
+                  >
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="text-lg font-semibold text-ink-faint">
+                        {index + 1}.
+                      </span>
+                      <span className="break-anywhere font-mono text-2xl font-bold text-ink">
+                        {action.type}
+                      </span>
+                      <span className="ml-auto whitespace-nowrap text-3xl font-semibold text-brand-red">
+                        {formatInt(action.rows_affected)}
+                        <span className="ml-1 text-base font-medium text-ink-soft">dòng</span>
+                      </span>
+                    </div>
+
+                    <CorruptionRowDiagram action={action} />
+
+                    <Isotype
+                      count={action.rows_affected}
+                      fill="var(--color-brand-red)"
+                      hollow={gateByType.get(action.type)?.survivingRows === 0}
+                      size={20}
+                    />
+
+                    <p className="text-base leading-relaxed text-ink-soft">
+                      {action.detail}
+                    </p>
+
+                    <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-brand-red-200 pt-3">
+                      {action.target_pillar.split("+").map((pillar) => (
+                        <Badge key={pillar} tone="red" size="md">
+                          {pillar}
+                        </Badge>
+                      ))}
+                      {declaredByType.has(action.type) ? (
+                        <span className="text-sm text-ink-faint">
+                          spec {formatFraction(declaredByType.get(action.type)!.fraction)}
+                        </span>
+                      ) : null}
+                      <span className="ml-auto">
+                        <GateBadge detail={gateByType.get(action.type)} />
+                      </span>
+                    </div>
+                  </li>
+                ))}
+            </ul>
           )}
         </ArtifactBoundary>
-      </Panel>
+      </Section>
 
-      <Panel
-        title="Dataset sau corrupt / repair"
-        subtitle="Cùng contract 16 cột như dataset sạch, để so trực tiếp từng dòng."
-        aside={
-          <div className="flex gap-1 rounded-md border border-line bg-canvas p-1">
-            {DATASET_TABS.map((tab) => (
-              <button
-                key={tab.state}
-                type="button"
-                onClick={() => setDataset(tab.state)}
-                aria-pressed={dataset === tab.state}
-                className={`rounded px-3 py-1 text-xs font-semibold transition-colors ${
-                  dataset === tab.state
-                    ? "bg-brand-blue text-white"
-                    : "text-ink-soft hover:text-brand-blue"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        }
+      <Section
+        title="Quality gate nhìn thấy được bao nhiêu"
+        subtitle="Cùng một bộ check chạy trên cả ba dataset. So sánh theo cột để thấy check nào thật sự phản ứng với corruption."
+        tone="alert"
       >
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-ink-faint">
-            Đang xem{" "}
-            <span className="font-mono">
-              {DATASET_TABS.find((tab) => tab.state === dataset)?.artifact}
-            </span>
-          </p>
-          <ArtifactBoundary state={rows} label={`dataset ${dataset}`}>
+        {reports.size > 0 ? (
+          <div className="flex flex-col gap-6">
+            {gate ? (
+              <Takeaway
+                tone="red"
+                figure={
+                  <div className="text-right">
+                    <p className="text-6xl font-semibold leading-none text-brand-red">
+                      {gate.invisibleCount}/{gate.items.length}
+                    </p>
+                    <p className="text-base text-ink-soft">dạng lỗi không check nào bắt</p>
+                  </div>
+                }
+              >
+                Lỗi tệ nhất là lỗi observability không nhìn thấy.
+              </Takeaway>
+            ) : null}
+
+            {gate && corruptedReport ? (
+              <ObservabilityGap
+                items={gate.items}
+                checks={corruptedReport.checks.map((check) => ({
+                  key: check.key,
+                  status: check.status,
+                  passed: check.passed,
+                }))}
+              />
+            ) : null}
+
+            <CheckMatrix reports={reports} />
+
+            {drift && drift.passedButMoved.length > 0 ? (
+              <DriftPanel
+                drift={drift.passedButMoved}
+                passLabel={passLabelOf(corruptedReport ?? null)}
+              />
+            ) : null}
+
+            <p className="text-base text-ink-soft">
+              Một dạng lỗi được coi là &ldquo;bắt được&rdquo; khi ít nhất một paper_id của nó
+              nằm trong tập dòng vi phạm của một check đang FAIL — tính lại trực tiếp từ
+              dataset corrupted và ngưỡng khai báo trong spec.{" "}
+              <Link
+                href="/compare"
+                className="font-semibold text-brand-blue underline underline-offset-4"
+              >
+                Xem thiệt hại thật lên câu trả lời →
+              </Link>
+            </p>
+          </div>
+        ) : (
+          <ArtifactBoundary state={quality} label="data/quality/*.json">
+            {() => null}
+          </ArtifactBoundary>
+        )}
+      </Section>
+
+      <DetailDrawer>
+        <Collapsible summary="Corruption spec khai báo" hint="pipeline_spec.corruption_spec">
+          <ArtifactBoundary state={spec} label="pipeline_spec.json">
+            {(data) => <SpecTable spec={data} />}
+          </ArtifactBoundary>
+        </Collapsible>
+
+        <Collapsible summary="Corruption log đầy đủ" hint="data/results/corruption_log.json">
+          <ArtifactBoundary state={log} label="corruption_log.json">
             {(data) => (
-              <CleanRowsTable
-                rows={data}
-                contractColumns={
-                  spec.status === "ok" ? spec.data.clean_contract.columns : undefined
-                }
-                derivedColumns={
-                  spec.status === "ok" ? spec.data.clean_contract.derived_columns : undefined
-                }
+              <CorruptionLogTable
+                log={data}
+                spec={spec.status === "ok" ? spec.data.corruption_spec : null}
               />
             )}
           </ArtifactBoundary>
-        </div>
-      </Panel>
+        </Collapsible>
+
+        <Collapsible summary="Dataset sau corrupt / repair" hint="cùng contract với dataset sạch">
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-1 rounded-md border border-line bg-canvas p-1 w-fit">
+              {DATASET_TABS.map((tab) => (
+                <button
+                  key={tab.state}
+                  type="button"
+                  onClick={() => setDataset(tab.state)}
+                  aria-pressed={dataset === tab.state}
+                  className={`rounded px-3 py-1 text-sm font-semibold transition-colors ${
+                    dataset === tab.state
+                      ? "bg-brand-blue text-white"
+                      : "text-ink-soft hover:text-brand-blue"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <ArtifactBoundary state={rows} label={`dataset ${dataset}`}>
+              {(data, path) => (
+                <CleanRowsTable
+                  rows={data}
+                  contractColumns={
+                    spec.status === "ok" ? spec.data.clean_contract.columns : undefined
+                  }
+                  derivedColumns={
+                    spec.status === "ok"
+                      ? spec.data.clean_contract.derived_columns
+                      : undefined
+                  }
+                  footer={`${formatInt(data.length)} dòng đọc từ ${path ?? "file"}.`}
+                />
+              )}
+            </ArtifactBoundary>
+          </div>
+        </Collapsible>
+      </DetailDrawer>
     </PageShell>
   );
 }
 
 /* -------------------------------------------------------------------------- */
 
-function CorruptionSpecView({ spec }: { spec: CorruptionSpec }) {
+/** Whether any failing quality check can be traced back to this corruption. */
+function GateBadge({ detail }: { detail?: Detectability }) {
+  if (!detail) return null;
+  if (detail.visible) {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-ok-200 bg-ok-50 px-3 py-1 text-sm font-bold text-ok">
+        <span aria-hidden>✓</span> {detail.caughtBy.join(", ")}
+      </span>
+    );
+  }
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatTile label="seed" value={spec.seed} tone="red" hint="cố định" />
-        <StatTile
-          label="min_surviving_rows"
-          value={spec.min_surviving_rows}
-          hint="chặn dưới để dataset không bị xoá sạch"
-        />
-        <StatTile label="số dạng lỗi" value={spec.kinds.length} />
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-brand-red-200 bg-surface px-3 py-1 text-sm font-bold text-brand-red-700">
+      <span aria-hidden>👁</span> gate không thấy
+    </span>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+function LossHeadline({ log }: { log: CorruptionLog }) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <BeforeAfter
+        label="Số dòng trong dataset"
+        before={log.rows_before}
+        after={log.rows_after}
+        beforeLabel="trước"
+        afterLabel="sau"
+      />
+      <BeforeAfter
+        label="paper_id duy nhất"
+        before={log.unique_paper_ids_before}
+        after={log.unique_paper_ids_after}
+        beforeLabel="trước"
+        afterLabel="sau"
+      />
+      <div className="rounded-xl border border-line bg-surface p-5">
+        <p className="text-base font-semibold uppercase tracking-wide text-ink-faint">
+          Seed corruption
+        </p>
+        <p className="mt-4 font-mono text-5xl font-semibold text-brand-red">{log.seed}</p>
+        <p className="mt-3 text-base leading-relaxed text-ink-soft">
+          Cố định, nên baseline ↔ corrupted ↔ repaired là phép so tái lập được: chênh lệch
+          metric quy về chất lượng dữ liệu chứ không phải nhiễu ngẫu nhiên.
+        </p>
+        <p className="mt-2 font-mono text-sm text-ink-faint">
+          {formatTimestamp(log.generated_at)}
+        </p>
       </div>
+    </div>
+  );
+}
 
-      <Note tone="warn">
-        Corruption dùng seed cố định (<Mono>{String(spec.seed)}</Mono>) nên cùng một dataset
-        đầu vào sẽ luôn hỏng theo đúng cùng một cách. Nhờ vậy phép so baseline ↔ corrupted ↔
-        repaired là tái lập được, và mọi chênh lệch metric quy về chất lượng dữ liệu chứ
-        không phải nhiễu ngẫu nhiên.
-      </Note>
+/* -------------------------------------------------------------------------- */
 
-      <ul className="grid gap-3 lg:grid-cols-2">
-        {spec.kinds.map((kind, index) => (
+/* -------------------------------------------------------------------------- */
+
+function CheckMatrix({ reports }: { reports: Map<string, QualityReport> }) {
+  const states = RUN_STATES.filter((state) => reports.has(state));
+  const keys: string[] = [];
+  for (const state of states) {
+    for (const check of reports.get(state)!.checks) {
+      if (!keys.includes(check.key)) keys.push(check.key);
+    }
+  }
+
+  return (
+    <ScrollShell>
+      <table className="w-full min-w-max border-collapse text-left">
+        <thead>
+          <tr>
+            <th className="border-b border-line px-3 py-3 text-base font-semibold uppercase tracking-wide text-ink-faint">
+              check
+            </th>
+            {states.map((state) => (
+              <th
+                key={state}
+                className="border-b border-line px-4 py-3 text-center text-lg font-bold text-ink"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="inline-block h-3 w-3 rounded-sm"
+                    style={{ backgroundColor: SERIES[state].fill }}
+                  />
+                  {state}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {keys.map((key) => (
+            <tr key={key} className="border-b border-line-soft last:border-b-0">
+              <th
+                scope="row"
+                className="whitespace-nowrap py-3 pr-6 pl-3 text-left font-mono text-lg font-medium text-ink"
+              >
+                {key}
+              </th>
+              {states.map((state) => {
+                const report = reports.get(state)!;
+                const check = report.checks.find((item) => item.key === key);
+                return (
+                  <td key={state} className="px-4 py-3 text-center align-middle">
+                    {check ? (
+                      <span className="inline-flex flex-col items-center gap-1">
+                        <Verdict
+                          status={check.status}
+                          passed={check.passed}
+                          passLabel={passLabelOf(report)}
+                        />
+                        <span className="font-mono text-sm text-ink-faint">
+                          {describeCheckValue(check.actual)}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-ink-faint">—</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </ScrollShell>
+  );
+}
+
+function DriftPanel({
+  drift,
+  passLabel,
+}: {
+  drift: DriftedCheck[];
+  passLabel: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border-2 border-brand-red-200 bg-brand-red-50 p-6">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="text-6xl font-semibold leading-none text-brand-red">
+          {drift.length}
+        </span>
+        <h3 className="text-2xl font-semibold text-ink">
+          check đã đổi giá trị đo — mà không hề FAIL
+        </h3>
+      </div>
+      <p className="mt-2 max-w-4xl text-lg leading-relaxed text-ink-soft">
+        Tín hiệu có ở đó. Luật thì không quan tâm.
+      </p>
+      <ul className="mt-5 flex flex-col gap-3">
+        {drift.map((check) => (
           <li
-            key={kind.type}
-            className="flex flex-col gap-2 rounded-lg border border-brand-red-200 bg-brand-red-50/50 p-4"
+            key={check.key}
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-brand-red-200 bg-surface px-5 py-4"
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand-red text-[11px] font-semibold text-white">
-                {index + 1}
+            <span className="font-mono text-xl font-semibold text-ink">{check.key}</span>
+            <span className="flex items-center gap-3">
+              <span className="font-mono text-2xl font-semibold text-brand-blue">
+                {describeCheckValue(check.before)}
               </span>
-              <span className="break-anywhere font-mono text-sm font-semibold text-ink">
-                {kind.type}
+              <span aria-hidden className="text-xl text-ink-faint">
+                →
               </span>
-              <span className="ml-auto font-mono text-sm font-semibold tabular-nums text-brand-red-700">
-                {formatFraction(kind.fraction)}
+              <span className="font-mono text-2xl font-semibold text-brand-red">
+                {describeCheckValue(check.after)}
               </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] uppercase tracking-wide text-ink-faint">
-                pillar
+            </span>
+            <span className="ml-auto flex items-center gap-3">
+              <span className="text-base text-ink-soft">
+                luật:{" "}
+                <span className="font-mono font-semibold text-ink">
+                  {describeCheckValue(check.expected)}
+                </span>
               </span>
-              {kind.pillar.split("+").map((pillar) => (
-                <Badge key={pillar} tone="red">
-                  {pillar}
-                </Badge>
-              ))}
-            </div>
-            <p className="text-[13px] leading-relaxed text-ink-soft">{kind.detail}</p>
+              <Verdict
+                status={check.status}
+                passed={check.passed}
+                passLabel={passLabel}
+              />
+            </span>
           </li>
         ))}
       </ul>
@@ -193,8 +482,58 @@ function CorruptionSpecView({ spec }: { spec: CorruptionSpec }) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Demoted detail                                                              */
+/* -------------------------------------------------------------------------- */
 
-function CorruptionLogView({
+function SpecTable({ spec }: { spec: PipelineSpec }) {
+  const corruption = spec.corruption_spec;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile label="seed" value={corruption.seed} tone="red" />
+        <StatTile
+          label="min_surviving_rows"
+          value={corruption.min_surviving_rows}
+          hint="chặn dưới để dataset không bị xoá sạch"
+        />
+        <StatTile label="số dạng lỗi" value={corruption.kinds.length} />
+      </div>
+      <DataTable
+        columns={[
+          {
+            key: "type",
+            header: "type",
+            cellClassName: "whitespace-nowrap font-mono text-xs font-semibold",
+            render: (row) => row.type,
+          },
+          {
+            key: "pillar",
+            header: "pillar",
+            cellClassName: "whitespace-nowrap text-xs",
+            render: (row) => row.pillar,
+          },
+          {
+            key: "fraction",
+            header: "fraction",
+            cellClassName: "whitespace-nowrap text-right font-mono tabular-nums text-xs",
+            headerClassName: "text-right",
+            render: (row) => formatFraction(row.fraction),
+          },
+          {
+            key: "detail",
+            header: "detail",
+            cellClassName: "min-w-[18rem] text-xs",
+            render: (row) => row.detail,
+          },
+        ]}
+        rows={corruption.kinds}
+        rowKey={(row) => row.type}
+      />
+    </div>
+  );
+}
+
+function CorruptionLogTable({
   log,
   spec,
 }: {
@@ -239,7 +578,18 @@ function CorruptionLogView({
       key: "ids",
       header: "paper_ids",
       cellClassName: "min-w-[18rem] max-w-[28rem] text-xs",
-      render: (row) => <PaperIds ids={row.paper_ids} />,
+      render: (row) => (
+        <span className="flex flex-wrap gap-1">
+          {(row.paper_ids ?? []).map((id, index) => (
+            <span
+              key={`${id}-${index}`}
+              className="break-anywhere rounded bg-canvas px-1.5 py-0.5 font-mono text-[11px] text-ink-soft"
+            >
+              {id}
+            </span>
+          ))}
+        </span>
+      ),
     },
     {
       key: "detail",
@@ -267,31 +617,8 @@ function CorruptionLogView({
     },
   ];
 
-  const rowsDelta = log.rows_after - log.rows_before;
-  const idsDelta = log.unique_paper_ids_after - log.unique_paper_ids_before;
-
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="rows_before" value={formatInt(log.rows_before)} />
-        <StatTile
-          label="rows_after"
-          value={formatInt(log.rows_after)}
-          hint={`${rowsDelta >= 0 ? "+" : "−"}${formatInt(Math.abs(rowsDelta))} so với before`}
-          tone={rowsDelta === 0 ? "neutral" : "red"}
-        />
-        <StatTile
-          label="unique_paper_ids_before"
-          value={formatInt(log.unique_paper_ids_before)}
-        />
-        <StatTile
-          label="unique_paper_ids_after"
-          value={formatInt(log.unique_paper_ids_after)}
-          hint={`${idsDelta >= 0 ? "+" : "−"}${formatInt(Math.abs(idsDelta))} so với before`}
-          tone={idsDelta === 0 ? "neutral" : "red"}
-        />
-      </div>
-
+    <div className="flex flex-col gap-4">
       <KeyValueList
         items={[
           { label: "Sinh lúc", value: <Mono>{formatTimestamp(log.generated_at)}</Mono> },
@@ -304,7 +631,7 @@ function CorruptionLogView({
                   {Object.entries(log.totals).map(([type, count]) => (
                     <span
                       key={type}
-                      className="rounded border border-line bg-canvas px-2 py-0.5 font-mono text-[12px] text-ink-soft"
+                      className="rounded border border-line bg-canvas px-2 py-0.5 font-mono text-sm text-ink-soft"
                     >
                       {type}: <span className="text-ink">{formatInt(count)}</span>
                     </span>
@@ -316,7 +643,6 @@ function CorruptionLogView({
           },
         ]}
       />
-
       <DataTable
         columns={columns}
         rows={log.actions ?? []}
@@ -324,41 +650,6 @@ function CorruptionLogView({
         footer={`${formatInt((log.actions ?? []).length)} action ghi trong log.`}
         emptyMessage="Log tồn tại nhưng mảng actions rỗng."
       />
-    </div>
-  );
-}
-
-function PaperIds({ ids }: { ids: string[] }) {
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return <span className="text-ink-faint">—</span>;
-  }
-  const preview = ids.slice(0, 4);
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="flex flex-wrap gap-1">
-        {preview.map((id, index) => (
-          <span
-            key={`${id}-${index}`}
-            className="break-anywhere rounded bg-canvas px-1.5 py-0.5 font-mono text-[11px] text-ink-soft"
-          >
-            {id}
-          </span>
-        ))}
-      </span>
-      {ids.length > preview.length ? (
-        <Collapsible summary={`Xem đủ ${ids.length} paper_id`}>
-          <ul className="flex flex-wrap gap-1">
-            {ids.map((id, index) => (
-              <li
-                key={`${id}-${index}`}
-                className="break-anywhere rounded bg-canvas px-1.5 py-0.5 font-mono text-[11px] text-ink-soft"
-              >
-                {id}
-              </li>
-            ))}
-          </ul>
-        </Collapsible>
-      ) : null}
     </div>
   );
 }

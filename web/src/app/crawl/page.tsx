@@ -1,21 +1,21 @@
 "use client";
 
 import { getPipelineSpec, getRawRecords, getRawResponse } from "@/lib/api";
+import { monthlyCounts } from "@/lib/derive";
 import { formatInt } from "@/lib/format";
 import { useArtifact } from "@/lib/use-artifact";
 import type { PaperRecord, PipelineSpec } from "@/lib/types";
 import { ArtifactBoundary } from "@/components/artifact-state";
 import { ArrayCell, LinkCell } from "@/components/cells";
+import { CrawlDiagram, MonthlyColumns } from "@/components/diagrams";
 import { Clamp, Column, DataTable } from "@/components/data-table";
 import {
-  Badge,
   Collapsible,
-  KeyValueList,
+  DetailDrawer,
   Mono,
-  Note,
   PageHeading,
   PageShell,
-  Panel,
+  Section,
   StatTile,
 } from "@/components/ui";
 
@@ -26,114 +26,143 @@ export default function CrawlPage() {
   const records = useArtifact(getRawRecords);
   const rawResponse = useArtifact(getRawResponse);
 
+  const recordCount = records.status === "ok" ? records.data.length : null;
+  const maxResults = spec.status === "ok" ? spec.data.source.max_results : null;
+  const apiName = spec.status === "ok" ? spec.data.source.api : "Nguồn dữ liệu";
+
   return (
     <PageShell>
       <PageHeading
         eyebrow="Stage 1 · crawl"
-        title="Data được lấy về như nào"
-        lede="Nguồn dữ liệu, câu query và bộ lọc đều lấy từ pipeline_spec.source. Bảng bên dưới chỉ hiển thị khi crawl đã thực sự ghi ra file raw."
+        title="Dữ liệu vào pipeline từ đâu"
+        lede="Một lần gọi API công khai, giữ lại nguyên văn response, rồi parse thành record có kiểu."
       />
 
-      <Panel
-        title="Cấu hình nguồn"
+      <Section
+        title="Đường đi của một lần crawl"
+        subtitle="Mỗi ô vuông bên phải là một record thật trong crossref_records.json."
+      >
+        <CrawlDiagram
+          apiName={apiName}
+          maxResults={maxResults}
+          recordCount={recordCount}
+        />
+      </Section>
+
+      <Section
+        title="Truy vấn gửi lên"
         subtitle={
           <>
-            Từ <Mono>pipeline_spec.source</Mono> — chính là hằng số mà{" "}
+            Từ <Mono>pipeline_spec.source</Mono> — chính là hằng số{" "}
             <Mono>src/core/config.py</Mono> dùng khi gọi API.
           </>
         }
       >
         <ArtifactBoundary state={spec} label="pipeline_spec.json">
-          {(data) => <SourceConfig spec={data} />}
+          {(data) => <SourceConfig spec={data} recordCount={recordCount} />}
         </ArtifactBoundary>
-      </Panel>
+      </Section>
 
-      <Panel
-        title="Records đã fetch"
-        subtitle={
-          <>
-            Parse từ raw response thành <Mono>PaperRecord</Mono> và ghi ra{" "}
-            <Mono>data/raw/crossref_records.json</Mono>.
-          </>
-        }
-        aside={
-          records.status === "ok" ? (
-            <Badge tone="blue">{formatInt(records.data.length)} records</Badge>
-          ) : null
-        }
+      <Section
+        title="Các paper lấy về nằm ở tháng nào"
+        subtitle="Đếm trực tiếp từ trường published của từng record. Đây là phân bố mà freshness check sẽ soi ở stage observe."
       >
         <ArtifactBoundary state={records} label="crossref_records.json">
-          {(rows) => <RecordsTable rows={rows} />}
+          {(rows) => (
+            <MonthlyColumns
+              data={monthlyCounts(rows)}
+              caption={`${formatInt(rows.length)} record, nhóm theo tháng của trường published.`}
+            />
+          )}
         </ArtifactBoundary>
-      </Panel>
+      </Section>
 
-      <Panel
-        title="Raw API response"
-        subtitle="Body nguyên trạng do Crossref trả về, giữ lại để truy vết khi số liệu downstream trông lạ."
-      >
-        <Collapsible summary="Xem raw response" hint="data/raw/crossref_response.json">
+      <DetailDrawer>
+        <Collapsible summary="Bảng record đã fetch" hint="data/raw/crossref_records.json">
+          <ArtifactBoundary state={records} label="crossref_records.json">
+            {(rows) => <RecordsTable rows={rows} />}
+          </ArtifactBoundary>
+        </Collapsible>
+
+        <Collapsible summary="Raw API response" hint="data/raw/crossref_response.json">
           <ArtifactBoundary state={rawResponse} label="crossref_response.json">
             {(data) => <RawJson data={data} />}
           </ArtifactBoundary>
         </Collapsible>
-      </Panel>
+      </DetailDrawer>
     </PageShell>
   );
 }
 
 /* -------------------------------------------------------------------------- */
 
-function SourceConfig({ spec }: { spec: PipelineSpec }) {
+function SourceConfig({
+  spec,
+  recordCount,
+}: {
+  spec: PipelineSpec;
+  recordCount: number | null;
+}) {
   const { source } = spec;
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatTile label="API" value={source.api} tone="blue" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          label="max_results"
-          value={source.max_results}
-          hint="trần số record mỗi lần crawl"
+          label="record lấy về"
+          value={recordCount === null ? "—" : formatInt(recordCount)}
+          tone="blue"
+          size="lg"
+          hint="đếm từ file raw"
         />
+        <StatTile label="max_results" value={source.max_results} hint="trần mỗi lần crawl" />
         <StatTile
           label="freshness threshold"
           value={spec.freshness.threshold_days}
-          hint="ngày — cũng chính là cửa sổ from-pub-date"
+          hint="ngày — cũng là cửa sổ from-pub-date"
         />
+        <StatTile label="top_k" value={spec.retrieval.top_k} hint="agent lấy về mỗi câu" />
       </div>
 
-      <KeyValueList
-        items={[
-          {
-            label: "Endpoint",
-            value: (
-              <a
-                href={source.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="break-anywhere font-mono text-[13px] text-brand-blue underline underline-offset-2"
-              >
-                {source.url}
-              </a>
-            ),
-          },
-          {
-            label: "Query",
-            value: <Mono>{source.query}</Mono>,
-            hint: "chuỗi tìm kiếm full-text gửi lên Crossref",
-          },
-          {
-            label: "Crossref filter",
-            value: <Mono>{source.filter}</Mono>,
-            hint: "giới hạn ngày xuất bản và bắt buộc có abstract",
-          },
-        ]}
-      />
+      <div className="flex flex-col gap-3">
+        <QueryLine label="endpoint">
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="break-anywhere font-mono text-lg text-brand-blue underline underline-offset-4"
+          >
+            {source.url}
+          </a>
+        </QueryLine>
+        <QueryLine label="query">
+          <span className="break-anywhere font-mono text-lg text-ink">{source.query}</span>
+        </QueryLine>
+        <QueryLine label="filter">
+          <span className="break-anywhere font-mono text-lg text-ink">{source.filter}</span>
+        </QueryLine>
+      </div>
 
-      <Note>
-        Filter <Mono>from-pub-date</Mono> được tính lại mỗi lần chạy dựa trên ngưỡng
-        freshness, nên giá trị hiển thị ở đây đúng với thời điểm spec được export chứ
-        không phải hằng số cố định.
-      </Note>
+      <p className="text-base leading-relaxed text-ink-soft">
+        <Mono>from-pub-date</Mono> được tính lại mỗi lần chạy theo ngưỡng freshness, nên giá
+        trị hiển thị đúng với thời điểm spec được export chứ không phải hằng số cố định.
+      </p>
+    </div>
+  );
+}
+
+function QueryLine({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded-lg border border-line bg-canvas px-4 py-3">
+      <span className="w-24 shrink-0 text-sm font-semibold uppercase tracking-wide text-ink-faint">
+        {label}
+      </span>
+      <span className="min-w-0 flex-1">{children}</span>
     </div>
   );
 }
@@ -230,12 +259,12 @@ function RawJson({ data }: { data: unknown }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs text-ink-faint">
+      <p className="text-sm text-ink-faint">
         {truncated
           ? `Hiển thị ${formatInt(MAX_RAW_CHARS)} / ${formatInt(text.length)} ký tự đầu tiên.`
           : `${formatInt(text.length)} ký tự.`}
       </p>
-      <pre className="scroll-shell max-h-[32rem] overflow-auto rounded-md border border-line bg-canvas px-3 py-2 font-mono text-[12px] leading-relaxed text-ink">
+      <pre className="scroll-shell max-h-[32rem] overflow-auto rounded-md border border-line bg-canvas px-3 py-2 font-mono text-xs leading-relaxed text-ink">
         <code>{shown}</code>
       </pre>
     </div>

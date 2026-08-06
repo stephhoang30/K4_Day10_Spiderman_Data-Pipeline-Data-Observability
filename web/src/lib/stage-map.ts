@@ -49,6 +49,46 @@ export const STAGE_ARTIFACTS: Record<string, string[]> = {
   ],
 };
 
+/**
+ * Nodes of the flow diagram on the overview page, and the logical artifacts each
+ * one produces. Same contract as `STAGE_ARTIFACTS`: keys into
+ * `pipeline_spec.artifacts`, so presence is read from disk, never assumed.
+ */
+export const FLOW_ARTIFACTS: Record<string, string[]> = {
+  crawl: ["raw_api_response", "raw_records"],
+  clean: ["clean_json", "clean_csv"],
+  corrupt: ["corrupted_json", "corruption_log"],
+  repair: ["repaired_json"],
+  index_baseline: ["embeddings"],
+  index_corrupted: ["corrupted_embeddings"],
+  index_repaired: ["repaired_embeddings"],
+  evaluate_baseline: ["test_set", "baseline_metrics", "baseline_answers"],
+  evaluate_corrupted: ["corrupted_metrics", "corrupted_answers"],
+  evaluate_repaired: ["repaired_metrics", "repaired_answers"],
+  compare: ["comparison_report"],
+};
+
+/**
+ * Naming hints for the clean-contract diagram.
+ *
+ * Most links are inferred from the artifact itself: a derived column named
+ * `<source>_something` comes from `<source>`, `text_for_embedding` comes from
+ * the fields listed in `clean_contract.text_for_embedding_template`, and a
+ * quality check named `<column>_something` watches `<column>`. These two maps
+ * cover only the cases where the names alone do not say it. They are names, not
+ * values — no count, metric or row is declared here.
+ */
+export const DERIVED_SOURCE_HINTS: Record<string, string[]> = {
+  age_days: ["published"],
+};
+
+export const CHECK_COLUMN_HINTS: Record<string, string[]> = {
+  freshness: ["age_days"],
+};
+
+/** The one derived column that is handed to the embedding model. */
+export const EMBEDDED_COLUMN = "text_for_embedding";
+
 /** Stages that exist only as a FE view, with no entry in pipeline_spec.stages. */
 export const DERIVED_STAGES = new Set<string>(["compare"]);
 
