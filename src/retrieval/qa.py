@@ -15,6 +15,7 @@ class AnswerResult:
     retrieved_doc_ids: list[str]
     retrieved_contexts: list[str]
     retrieved_titles: list[str]
+    retrieved_scores: list[float]
 
 
 def _extract_answer(question: str, top_result: SearchResult) -> str:
@@ -53,4 +54,5 @@ def answer_question(question: str, settings: Settings, index: LocalEmbeddingInde
         retrieved_doc_ids=[item.paper_id for item in retrieved],
         retrieved_contexts=[item.content for item in retrieved],
         retrieved_titles=[item.title for item in retrieved],
+        retrieved_scores=[item.score for item in retrieved],
     )
