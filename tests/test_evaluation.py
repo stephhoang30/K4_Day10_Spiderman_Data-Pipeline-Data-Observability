@@ -4,7 +4,7 @@ import pandas as pd
 
 from evaluation import metrics, testset
 from evaluation.testset import build_test_set
-from observability import quality
+from observability import quality, reporting
 
 
 def test_build_test_set_is_deterministic_and_skips_missing_fields(monkeypatch) -> None:
@@ -190,3 +190,76 @@ def test_freshness_report_contains_date_range_and_stale_count(monkeypatch) -> No
     assert report["stale_rows"] == 1
     assert report["is_fresh"] is False
     assert "freshness.json" in written
+
+
+def test_phase1_report_contains_metrics_quality_and_freshness(monkeypatch) -> None:
+    written = {}
+    monkeypatch.setattr(reporting, "write_text", lambda path, content: written.update({str(path): content}))
+
+    reporting.generate_phase1_report(
+        "phase1_report.md",
+        source_summary={"source": "Crossref", "raw_records": 20, "clean_records": 18},
+        metrics={
+            "retrieval_hit_rate": 0.8,
+            "mean_token_f1": 0.7,
+            "judge_accuracy": 0.9,
+            "mean_judge_score": 4.5,
+            "by_question_type": {
+                "date": {
+                    "samples": 4,
+                    "retrieval_recall_at_k": 1.0,
+                    "answer_accuracy": 1.0,
+                    "mean_judge_score": 5.0,
+                }
+            },
+        },
+        quality={
+            "status": "PASS",
+            "checks": {
+                "row_count": {
+                    "status": "PASS",
+                    "actual": 18,
+                    "expected": "> 0",
+                    "message": "ok",
+                }
+            },
+        },
+        freshness={
+            "status": "PASS",
+            "is_fresh": True,
+            "latest_published": "2026-07-01",
+            "stale_rows": 0,
+            "total_rows": 18,
+        },
+    )
+
+    content = written["phase1_report.md"]
+    assert "# Baseline Data Pipeline Report" in content
+    assert "retrieval_hit_rate" in content
+    assert "mean_judge_score" in content
+    assert "## Data quality" in content
+    assert "## Freshness" in content
+    assert "Crossref" in content
+
+
+def test_corruption_report_shows_deltas_and_recovery(monkeypatch) -> None:
+    written = {}
+    monkeypatch.setattr(reporting, "write_text", lambda path, content: written.update({str(path): content}))
+
+    reporting.generate_corruption_report(
+        "corruption_report.md",
+        baseline_metrics={"retrieval_hit_rate": 1.0, "mean_token_f1": 0.9, "judge_accuracy": 1.0, "mean_judge_score": 5.0},
+        corrupted_metrics={"retrieval_hit_rate": 0.5, "mean_token_f1": 0.4, "judge_accuracy": 0.5, "mean_judge_score": 3.0},
+        repaired_metrics={"retrieval_hit_rate": 0.9, "mean_token_f1": 0.8, "judge_accuracy": 0.9, "mean_judge_score": 4.5},
+        corrupted_quality={"status": "FAIL", "passed_checks": 2, "failed_checks": 3},
+        repaired_quality={"status": "PASS", "passed_checks": 5, "failed_checks": 0},
+        corrupted_freshness={"status": "FAIL", "is_fresh": False, "stale_rows": 4, "total_rows": 18},
+        repaired_freshness={"status": "PASS", "is_fresh": True, "stale_rows": 0, "total_rows": 18},
+    )
+
+    content = written["corruption_report.md"]
+    assert "# Data Corruption Comparison Report" in content
+    assert "Repaired - baseline" in content
+    assert "-0.1" in content
+    assert "Data quality comparison" in content
+    assert "Freshness comparison" in content
