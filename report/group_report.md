@@ -1,6 +1,6 @@
 # Group Report — Day 10: Data Pipeline & Data Observability
 
-> Trạng thái: **đang thực hiện**. Các ô đánh dấu `⏳` là phần phụ thuộc kết quả chạy pipeline, sẽ điền sau khi baseline và corruption flow chạy xong. Không điền số liệu ước lượng vào các ô này.
+> Trạng thái: **đã chạy trọn end-to-end**. Baseline và corruption flow đều hoàn tất, mọi số liệu trong báo cáo lấy từ artifact thật trong `data/`. Không có giá trị ước lượng.
 
 ## 1. Thông tin bài nộp
 
@@ -25,21 +25,15 @@
 
 **Tóm tắt của nhóm:**
 
-⏳ Viết lại sau khi chạy đủ baseline và corruption flow. Trạng thái tại thời điểm hiện tại:
+Nhóm hoàn thành trọn vòng đời dữ liệu. Ingestion lấy 24 record từ Crossref REST API có retry/backoff cho 429/503 và lưu raw response trước khi parse. Cleaning chốt contract 16 cột với 6 rule loại row, 2 rule dedupe và 5 cột derived, giữ nguyên 24 row. Index MiniLM + ChromaDB build được collection riêng cho từng trạng thái. Evaluation chạy 72 câu hỏi trên cùng một test set cho cả ba trạng thái. Data quality 7 check và freshness monitoring theo ngưỡng 180 ngày đều sinh artifact thật.
 
-Môi trường đã dựng xong bằng `uv sync` trên Python 3.11.15 với toàn bộ dependency theo `uv.lock`; provider LLM cấu hình là OpenAI `gpt-4o-mini`, embedding chạy local bằng MiniLM nên không phát sinh chi phí ở bước index. Phần cleaning và corruption (Role 3) đã hoàn thành và được kiểm chứng độc lập: contract 16 cột đã chốt, 6 rule loại row và 2 rule dedupe đã cài, 6 loại corruption đã cài với seed cố định `20251110` để kết quả so sánh tái hiện được.
+Baseline sinh đủ artifact: raw response và records, cleaned CSV/JSON, cleaning log, embedding manifest, test set, metrics, answers, quality report, freshness report và `phase1_report.md`.
 
-Đã có bằng chứng sơ bộ trên sample dataset 13 record rằng corruption làm giảm chất lượng agent: retrieval hit rate 1.000 → 0.615 và số câu trả lời rỗng 0 → 7. Đây là số đo trên dữ liệu mẫu tổng hợp dùng để validate contract, **không phải** metrics của bài nộp; metrics chính thức phải lấy từ `data/results/` sau khi chạy pipeline thật trên dữ liệu Crossref.
+Corruption ảnh hưởng rõ nhất là `drop_latest_records`: xoá 4 paper mới nhất làm 12 câu hỏi liên quan rơi xuống hit rate 0.000 và token F1 0.023. Đáng lo hơn cả con số là **không một quality check nào phát hiện được** — `row_count` chỉ kiểm tra `> 0`. Ngược lại, `truncate_title` không gây thiệt hại nào vì semantic search gánh thay khi exact lookup trượt, đi ngược dự đoán ban đầu của nhóm.
 
-Ingestion và cleaning đã chạy thông trên dữ liệu Crossref thật: 24 record raw, 24 row clean, `paper_id` unique, không loại record nào. Artifact đã có trong `data/raw/`, `data/clean/` và `data/quality/cleaning_log.json`.
+Repair từ raw phục hồi **đúng bằng** baseline trên cả bốn metric, đồng thời đưa quality và freshness từ FAIL về PASS.
 
-Embedding index đã build được trên dữ liệu thật (collection `papers-baseline`, 24 doc) và smoke test cho thấy semantic search, exact lookup theo title lẫn `paper_id`, và agent đều trả về kết quả có nguồn — trừ câu hỏi `categories` trả lời rỗng.
-
-Baseline đã chạy tới bước cuối: test set 72 câu hỏi, evaluation, data quality (7 check, PASS) và freshness report (fresh) đều có artifact thật. Quality gate đã được audit bằng cách cho ăn corrupted data — overall lật PASS sang FAIL, tức là không hard-code pass (mục 8).
-
-Hai vấn đề lớn cần xử lý trước khi kết luận: **baseline degenerate**, mọi metric bằng 1.000 do test set nhúng nguyên title nên agent đi đường tắt exact lookup thay vì semantic search (mục 11.2); và **ba loại corruption không có check nào bắt được** — `drop_latest_records`, `truncate_title`, `inject_noise` (mục 8).
-
-Blocker còn lại: `src/observability/reporting.py` (Role 5) còn `NotImplementedError` nên chưa sinh được `phase1_report.md` và comparison report, kéo theo corruption flow chưa chạy được. Ngoài ra Crossref không trả `subject` cho bất kỳ record nào, làm loại câu hỏi `categories` không dùng được — xem mục 12.
+Giới hạn quan trọng nhất còn lại: baseline degenerate, mọi metric bằng 1.000 vì test set nhúng nguyên title khiến agent đi đường tắt exact lookup thay vì semantic search. Đo riêng cho thấy recall@1 tụt từ 0.931 xuống 0.042 khi bỏ title khỏi câu hỏi. Cần bổ sung nhóm câu hỏi không nhúng title thì mới đo được chất lượng retrieval thật.
 
 ## 3. Kiến trúc và luồng dữ liệu
 
@@ -138,8 +132,8 @@ uv run python script/team_progress.py
 
 | Lệnh             | Trạng thái                                    | Thời điểm chạy gần nhất | Bằng chứng                         |
 | ----------------- | ----------------------------------------------- | ----------------------------- | ------------------------------------ |
-| Baseline pipeline | Chạy được tới bước cuối, dừng ở `generate_phase1_report` (Role 5) còn `NotImplementedError`. Mọi bước trước đó thành công | 2026-08-06 | `data/eval/test_set.json`, `data/results/baseline_metrics.json`, `data/results/baseline_answers.json`, `data/quality/baseline_quality.json`, `data/quality/freshness_report.json` |
-| Corruption flow   | Chưa chạy được — phụ thuộc baseline metrics và test set | — | — |
+| Baseline pipeline | Thành công, chạy trọn vẹn | 2026-08-06 | `data/eval/test_set.json`, `data/results/baseline_{metrics,answers}.json`, `data/quality/baseline_quality.json`, `data/quality/freshness_report.json`, `data/reports/phase1_report.md` |
+| Corruption flow   | Thành công, chạy trọn vẹn | 2026-08-06 | `data/results/{corrupted,repaired}_metrics.json`, `data/results/corruption_log.json`, `data/reports/corruption_report.md`, `data/clean/papers_clean_{corrupted,repaired}.json` |
 | `validate_clean_contract.py` | Thành công — 29/29 check PASS | 2026-08-06 | Output stdout của script, không cần artifact ngoài |
 | Index + smoke test (CP2: `LocalEmbeddingIndex.build` → semantic search / exact lookup / agent) | Thành công — search có kết quả xếp hạng, lookup theo title và `paper_id` đều trúng, agent trả lời 3/4 loại câu hỏi (`categories` rỗng) | 2026-08-06 | `data/embeddings/papers_embeddings.json`, collection `papers-baseline` |
 | Ingestion + cleaning (chạy trực tiếp `fetch_source_records` → `build_clean_dataframe` → `write_clean_artifacts`) | Thành công — 24 record raw, 24 row clean, loại 0 | 2026-08-06 | `data/raw/crossref_records.json`, `data/clean/papers_clean.json`, `data/quality/cleaning_log.json` |
@@ -214,7 +208,7 @@ Giải thích cách nhóm tạo `text_for_embedding`, document ID và `age_days`
 
 | Thành phần                             | Cấu hình thực tế          |
 | ---------------------------------------- | ----------------------------- |
-| Số câu hỏi                            | ⏳ Chờ Role 5 hoàn thiện `build_test_set` |
+| Số câu hỏi                            | 72 (24 paper × 3 loại câu hỏi) |
 | Các`question_type`                    | `summary`, `authors`, `date` dùng được. **`categories` không dùng được** — 0/24 record có categories nên agent trả lời rỗng (đã smoke test) |
 | Ground-truth document ID                 | Lấy từ `paper_id` của cleaned dataset, không tự sinh ID |
 | Embedding model                          | `sentence-transformers/all-MiniLM-L6-v2` |
@@ -248,7 +242,7 @@ Nếu sinh lại test set từ corrupted dataset thì ground truth cũng bị h�
 | Evaluation set           | `data/eval/`                         | Có | `test_set.json`, 72 câu hỏi (24 paper × 3 loại) |
 | Baseline metrics         | `data/results/baseline_metrics.json` | Có | 72 sample — **đọc mục 11.2 trước khi dùng** |
 | Quality/freshness        | `data/quality/`                      | Có | `baseline_quality.json` (7 check, PASS) + `freshness_report.json` (fresh) |
-| Baseline report          | `data/reports/phase1_report.md`      | Thiếu | `reporting.py` còn `NotImplementedError` |
+| Baseline report          | `data/reports/phase1_report.md`      | Có | Sinh bởi `generate_phase1_report` |
 | Pipeline spec            | `data/pipeline_spec.json`            | Có | Sinh bởi `script/export_pipeline_spec.py`, dump hằng số thật từ module Python |
 
 ### Baseline metrics
@@ -312,17 +306,17 @@ Sáu loại corruption, mỗi loại nhắm một pillar observability khác nha
 
 | Corruption         | Cách tạo | Record bị tác động | Quality signal kỳ vọng | Tác động thực tế | Cách repair   |
 | ------------------ | ---------- | ---------------------: | ------------------------ | --------------------- | -------------- |
-| `drop_latest_records` | Xóa 20% (2–4) paper có `published` mới nhất | ⏳ | Row count giảm; `latest_published` lùi lại → freshness fail | ⏳ | Chạy lại `build_clean_dataframe` từ `data/raw/crossref_records.json` |
-| `blank_summary` | Set `summary = ""` trên 15% row | ⏳ | `summary_chars = 0` → completeness fail | ⏳ | Như trên |
-| `inject_noise` | Chèn mojibake `Ã¢â‚¬â„¢` và rác OCR `###OCR-ERR###` vào 15% row | ⏳ | Phân bố `summary_chars` lệch; embedding bị kéo lệch | ⏳ | Như trên |
-| `truncate_title` | Cắt `title` còn 18 ký tự trên 15% row | ⏳ | Phá exact-title lookup của agent | ⏳ | Như trên |
-| `stale_published` | Lùi `published` và `updated` lại 2920 ngày trên 20% row | ⏳ | `age_days` vượt ngưỡng 180 → freshness fail | ⏳ | Như trên |
-| `duplicate_rows` | Nhân bản nguyên row trên 10% row | ⏳ | `paper_id` hết unique → uniqueness fail | ⏳ | Như trên |
+| `drop_latest_records` | Xóa 4 paper có `published` mới nhất | 4 | Row count giảm → **không check nào bắt được** | hit 0.000, token F1 0.023, judge 0.000 trên 12 câu | Chạy lại `build_clean_dataframe` từ `data/raw/crossref_records.json` |
+| `blank_summary` | Set `summary = ""` | 3 | `summary_chars = 0` → `summary_length` FAIL | hit 1.000, token F1 0.667 trên 9 câu | Như trên |
+| `inject_noise` | Chèn mojibake `Ã¢â‚¬â„¢` và rác OCR `###OCR-ERR###` | 3 | Phân bố `summary_chars` lệch → **không check nào bắt được** | token F1 0.991 — gần như không ảnh hưởng | Như trên |
+| `truncate_title` | Cắt `title` còn 18 ký tự | 3 | Phá exact-title lookup → **không check nào bắt được** | token F1 1.000 — **không gây thiệt hại**, semantic search gánh thay | Như trên |
+| `stale_published` | Lùi `published` và `updated` lại 2920 ngày | 4 | `age_days` vượt 180 → `freshness` FAIL, 5 row stale | hit 1.000, token F1 0.667 trên 12 câu | Như trên |
+| `duplicate_rows` | Nhân bản nguyên row | 2 | `paper_id` hết unique → `paper_id_unique` FAIL | token F1 0.833 trên 6 câu | Như trên |
 
 Corruption log:
 
 - Đường dẫn: `data/results/corruption_log.json`
-- Trạng thái: ⏳ Chờ chạy corruption flow
+- Trạng thái: Có. 24 → 22 row, unique `paper_id` 24 → 20, ghi đủ 6 action kèm danh sách `paper_ids` bị tác động
 - Nội dung log ghi lại: `seed`, `rows_before`, `rows_after`, `unique_paper_ids_before`, `unique_paper_ids_after`, và với mỗi action là `type`, `target_pillar`, `rows_affected`, danh sách `paper_ids` bị tác động, `detail`.
 
 Giải thích cách repair đảm bảo dữ liệu được phục hồi từ nguồn đáng tin cậy thay vì chỉ che kết quả lỗi:
@@ -340,21 +334,50 @@ Chi tiết đáng chú ý: chỉ blank 2 summary nhưng có 7 câu trả lời r
 
 ## 10. So sánh baseline, corrupted và repaired
 
-⏳ Chờ đủ ba file `data/results/baseline_metrics.json`, `corrupted_metrics.json`, `repaired_metrics.json`.
+Cùng một test set 72 câu hỏi cho cả ba trạng thái. Số liệu từ `data/results/{baseline,corrupted,repaired}_metrics.json`.
 
 | Metric/signal            | Baseline | Corrupted | Repaired | Thay đổi do corruption | Mức phục hồi | Nhận xét   |
 | ------------------------ | -------: | --------: | -------: | -----------------------: | --------------: | ------------ |
-| `retrieval_hit_rate`   | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | |
-| `mean_token_f1`        | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | |
-| `judge_accuracy`       | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | |
-| `mean_judge_score`     | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | |
-| Quality checks pass/fail | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | |
-| Freshness status         | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | |
+| `retrieval_hit_rate`   | 1.000 | 0.833 | 1.000 | −0.167 | Về đúng baseline | 12/72 câu mất hẳn document nguồn |
+| `mean_token_f1`        | 1.000 | 0.739 | 1.000 | −0.261 | Về đúng baseline | Giảm mạnh nhất trong các metric |
+| `judge_accuracy`       | 1.000 | 0.722 | 1.000 | −0.278 | Về đúng baseline | 20/72 câu bị judge chấm sai |
+| `mean_judge_score`     | 5.000 | 3.917 | 5.000 | −1.083 | Về đúng baseline | |
+| Quality checks pass/fail | PASS | **FAIL** | PASS | Lật trạng thái | Về đúng baseline | `paper_id_unique` + `summary_length` fail |
+| Freshness status         | PASS (0 stale) | **FAIL** (5 stale) | PASS (0 stale) | Lật trạng thái | Về đúng baseline | |
 
-Nêu ít nhất hai kết luận có quan hệ nhân quả được hỗ trợ bởi artifacts:
+Corruption: 24 → 22 row, unique `paper_id` 24 → 20. Repair phục hồi **đúng bằng** baseline trên mọi metric, không hơn không kém — đúng như kỳ vọng, vì repair chạy lại cùng hàm cleaning trên cùng raw records.
 
-1. ⏳ Dự kiến: `blank_summary` + `inject_noise` → `summary_chars` fail trong quality report → `mean_token_f1` và `judge_accuracy` giảm. Cần số liệu thật để xác nhận.
-2. ⏳ Dự kiến: repair từ raw → `age_days` và `paper_id` unique trở lại pass → metrics phục hồi về gần baseline. Cần số liệu thật để xác nhận.
+### Tách ảnh hưởng theo từng loại corruption
+
+Vì các tập row bị tác động là disjoint, có thể quy trách nhiệm cho từng loại. Nhóm câu hỏi tính theo `ground_truth_doc_ids` của những paper bị loại corruption đó chạm vào:
+
+| Loại corruption | Số câu | hit | token F1 | judge | Nhận xét |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `drop_latest_records` | 12 | **0.000** | **0.023** | **0.000** | Thảm khốc. Document bị xoá khỏi corpus nên không cách nào retrieve được |
+| `stale_published` | 12 | 1.000 | 0.667 | 0.667 | Retrieve vẫn đúng, nhưng câu hỏi về ngày trả lời sai (1/3 loại câu hỏi) |
+| `blank_summary` | 9 | 1.000 | 0.667 | 0.667 | Retrieve vẫn đúng, câu hỏi summary trả lời rỗng |
+| `duplicate_rows` | 6 | 1.000 | 0.833 | 0.833 | |
+| `inject_noise` | 9 | 1.000 | 0.991 | 0.889 | Gần như không ảnh hưởng |
+| `truncate_title` | 9 | 1.000 | **1.000** | 1.000 | **Không gây thiệt hại nào** |
+| Không bị đụng | 18 | 1.000 | 1.000 | 1.000 | Nhóm đối chứng |
+
+Nhóm 18 câu không bị đụng giữ nguyên 1.000 trên mọi metric, xác nhận mức giảm đến từ corruption chứ không từ nhiễu đo đạc.
+
+### Kết luận nhân quả
+
+1. **`drop_latest_records` → mất document khỏi corpus → `retrieval_hit_rate` về 0 cho nhóm bị ảnh hưởng.** 4 paper mới nhất bị xoá (`data/results/corruption_log.json`), kéo theo 12 câu hỏi có `ground_truth_doc_ids` trỏ vào chúng rơi xuống hit 0.000 và token F1 0.023. Đây là nguồn gây hại lớn nhất, chiếm phần lớn mức giảm −0.167 của toàn bộ hit rate. **Đáng báo động: không một quality check nào phát hiện ra** — `row_count` chỉ kiểm tra `> 0` nên 24 → 22 vẫn PASS (mục 8).
+
+2. **Repair từ raw → quality và freshness trở lại PASS → metrics phục hồi đúng bằng baseline.** `build_clean_dataframe` chạy lại trên `data/raw/crossref_records.json` — nguồn mà corruption không chạm tới — cho ra 24 row, `paper_id` unique trở lại, 0 row stale, và cả bốn metric về đúng giá trị baseline. Chứng minh pipeline phục hồi được từ lineage chứ không phải sửa tay kết quả.
+
+3. **`stale_published` và `blank_summary` → hai pillar khác nhau, cùng một mức thiệt hại 0.667.** Cả hai đều không phá retrieval (hit vẫn 1.000) mà phá answer: một cái làm sai câu hỏi về ngày, một cái làm rỗng câu hỏi summary. Mỗi loại chỉ hỏng 1 trong 3 loại câu hỏi nên token F1 dừng ở đúng 2/3. Đây là bằng chứng cho thấy retrieval đúng **không đảm bảo** câu trả lời đúng.
+
+### Điều đi ngược dự đoán ban đầu
+
+Ở mục 11.2 nhóm dự đoán `truncate_title` sẽ phá exact-title lookup và làm metrics rơi mạnh. **Số liệu bác bỏ điều đó**: nhóm 9 câu bị truncate giữ nguyên 1.000 trên cả ba metric.
+
+Lý do: test set giữ title gốc, còn corpus đã bị cắt title, nên `index.lookup()` trượt và rơi về semantic search — mà semantic search vẫn tìm đúng document (recall@1 = 0.931 khi câu hỏi còn chứa title, đo ở mục 11.2). Nói cách khác, khi đường tắt bị phá thì đường chính vẫn gánh được.
+
+Điều này vừa đính chính dự đoán sai, vừa làm nhẹ bớt lo ngại ở mục 11.2: baseline tuy degenerate vì đi đường tắt, nhưng retrieval ngữ nghĩa phía dưới không rỗng — nó thực sự hoạt động khi được gọi tới.
 
 Không kết luận corruption "có tác động" nếu số liệu không cho thấy thay đổi. Nếu kết quả khác kỳ vọng, mô tả giả thuyết và cách nhóm đã kiểm tra.
 
@@ -393,7 +416,12 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 - **Cách xử lý:** Không cần đổi dependency. Starter đã inject một module shim trước khi import ragas trong `src/evaluation/metrics.py`, và ragas mặc định bị skip trừ khi set `RUN_RAGAS=1`, nên pipeline chính không phụ thuộc vào đường import này.
 - **Cách xác minh:** Import ragas qua đúng đường shim chạy thành công; `_run_ragas()` trả về `{"skipped": ...}` khi không bật `RUN_RAGAS`.
 
-⏳ Bổ sung thêm vấn đề tích hợp phát sinh khi ghép các module (dự kiến sẽ có ở bước ghép ingestion → cleaning → index).
+### 11.4 Cleaning log ghi đường dẫn tuyệt đối, artifact bị churn giữa các máy
+
+- **Triệu chứng:** Diff `data/quality/cleaning_log.json` giữa hai lần chạy của hai thành viên cho thấy đường dẫn đổi hoàn toàn: `/Users/.../data/clean/papers_clean.csv` trên macOS và `F:\AIIA\...\data\clean\papers_clean.csv` trên Windows. Mỗi lần bất kỳ ai chạy lại là file đổi, sinh conflict vô nghĩa khi merge, đồng thời lộ cấu trúc thư mục máy cá nhân vào repo.
+- **Nguyên nhân:** `phase1._save_clean_artifacts` gọi `write_cleaning_log` mà không truyền `project_dir`, nên hàm `_relative_to` rơi vào nhánh fallback trả nguyên đường tuyệt đối. Đường gọi qua `write_clean_artifacts` có truyền nên vẫn đúng — chỉ đường đi qua pipeline mới hỏng, mà đó lại là đường cả nhóm thực sự dùng.
+- **Cách xử lý:** Thêm `PROJECT_ROOT` suy từ vị trí module làm mốc mặc định, và trả `as_posix()` để Windows lẫn macOS cho ra cùng một chuỗi.
+- **Cách xác minh:** Gọi cả hai đường (`write_clean_artifacts` và đường của `phase1`) đều cho `{"csv": "data/clean/papers_clean.csv", ...}`.
 
 ## 12. Giới hạn và hướng cải thiện
 
@@ -404,16 +432,18 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 | Corpus chỉ 24 record (`max_results`) | Mỗi record bị corrupt chiếm tỉ trọng lớn, metrics dao động mạnh | Tăng `max_results` và chạy lại, so sánh biên độ dao động của `retrieval_hit_rate` giữa hai kích thước corpus |
 | Corruption dùng seed cố định | Kết luận chỉ đúng cho một cấu hình row bị tác động | Chạy lại với vài seed khác nhau, báo cáo khoảng dao động của metrics thay vì một điểm |
 | LLM judge phụ thuộc API ngoài | Khi API lỗi, `_judge_answer` rơi về heuristic token F1 và điểm judge không so sánh được giữa các lần chạy | Ghi lại trong metrics số lần rơi vào fallback; loại các lần chạy có fallback khỏi bảng so sánh |
-| ⏳ Bổ sung sau khi chạy end-to-end | | |
+| Baseline degenerate, mọi metric bằng 1.000 | Không có headroom để đo cải thiện; mức giảm do corruption bị phóng đại vì so với trần tuyệt đối | Thêm nhóm câu hỏi không nhúng title, báo cáo riêng hai nhóm. Đo lại `recall@1` cho từng nhóm |
+| LLM judge chưa từng chạy thật | `judge_accuracy` là điểm của deterministic judge, không phản ánh chất lượng ngôn ngữ của câu trả lời | Chạy lại một lượt với `RUN_LLM_JUDGE=1` cho cả ba trạng thái rồi so bảng metrics với lượt hiện tại |
+| 3/6 loại corruption không có quality check nào bắt được | Lỗi dữ liệu lọt tới người dùng trước khi bị phát hiện — đúng rủi ro mà bài lab muốn cảnh báo | Thêm check volume so với lần chạy trước, check độ dài title tối thiểu, và check phân bố ký tự của summary. Xác minh lại bằng `script/audit_quality_gate.py` |
 
 ## 13. Checklist trước khi nộp
 
 - [x] Thông tin nhóm và repository chính xác.
 - [x] Phân công khớp với module, artifact và kết quả thực tế.
-- [ ] Lệnh tái hiện đã được chạy lại trên phiên bản dùng để nộp.
-- [ ] Baseline, corrupted và repaired dùng cùng evaluation set.
-- [ ] Bảng metrics khớp với các file trong `data/results/`.
-- [ ] Quality/freshness conclusions khớp với `data/quality/`.
-- [ ] Các đường dẫn báo cáo và artifact truy cập được.
-- [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng.
+- [x] Lệnh tái hiện đã được chạy lại trên phiên bản dùng để nộp — `run_phase1.py` và `run_corruption_flow.py` đều chạy trọn vẹn ngày 2026-08-06.
+- [x] Baseline, corrupted và repaired dùng cùng evaluation set `data/eval/test_set.json`, 72 câu hỏi, không sinh lại giữa các trạng thái.
+- [x] Bảng metrics khớp với các file trong `data/results/`.
+- [x] Quality/freshness conclusions khớp với `data/quality/`.
+- [x] Các đường dẫn báo cáo và artifact truy cập được.
+- [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng — `report/individual_report.md` còn trống.
 - [x] Không có `.env`, API key, token hoặc secret trong source, report, log hay ảnh.
