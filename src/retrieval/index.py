@@ -22,6 +22,18 @@ class SearchResult:
 
 
 class LocalEmbeddingIndex:
+    REQUIRED_COLUMNS = {
+        "paper_id",
+        "title",
+        "text_for_embedding",
+        "published",
+        "authors_joined",
+        "categories_joined",
+        "summary",
+        "abs_url",
+        "pdf_url",
+    }
+
     def __init__(
         self,
         settings: Settings,
@@ -42,15 +54,32 @@ class LocalEmbeddingIndex:
 
     @staticmethod
     def _build_documents(df: pd.DataFrame) -> list[dict[str, Any]]:
+        missing_columns = LocalEmbeddingIndex.REQUIRED_COLUMNS.difference(df.columns)
+        if missing_columns:
+            missing = ", ".join(sorted(missing_columns))
+            raise ValueError(f"Cleaned dataframe is missing required RAG columns: {missing}.")
+        if df.empty:
+            raise ValueError(
+                "Cannot build a RAG index from an empty dataframe. "
+                "Run the ingestion and cleaning pipeline first."
+            )
+
         records = df.to_dict(orient="records")
         documents: list[dict[str, Any]] = []
         for index, row in enumerate(records):
+            paper_id = str(row["paper_id"]).strip()
+            title = str(row["title"]).strip()
+            content = str(row["text_for_embedding"]).strip()
+            if not paper_id or not title or not content:
+                raise ValueError(
+                    "Each indexed record needs non-empty paper_id, title, and text_for_embedding."
+                )
             documents.append(
                 {
-                    "record_id": f"{row['paper_id']}::{index}",
-                    "paper_id": row["paper_id"],
-                    "title": row["title"],
-                    "content": row["text_for_embedding"],
+                    "record_id": f"{paper_id}::{index}",
+                    "paper_id": paper_id,
+                    "title": title,
+                    "content": content,
                     "metadata": {
                         "paper_id": row["paper_id"],
                         "title": row["title"],
@@ -116,7 +145,7 @@ class LocalEmbeddingIndex:
             {
                 "backend": "chroma",
                 "embedding_model": settings.embedding_model,
-                "persist_path": str(persist_path),
+                "persist_path": str(persist_path.relative_to(settings.paths.project_dir)),
                 "collection_name": collection_name,
                 "documents": documents,
             },
@@ -130,19 +159,37 @@ class LocalEmbeddingIndex:
 
     @classmethod
     def load(cls, settings: Settings, embeddings_path: Path | None = None) -> "LocalEmbeddingIndex":
-        payload = read_json(embeddings_path or settings.paths.embeddings_json)
+        manifest_path = embeddings_path or settings.paths.embeddings_json
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                f"RAG index manifest not found at {manifest_path}. "
+                "Run the baseline pipeline to create cleaned data and embeddings first."
+            )
+        payload = read_json(manifest_path)
         return cls(
             settings=settings,
             collection_name=payload["collection_name"],
             documents=payload["documents"],
-            persist_path=Path(payload["persist_path"]),
+            # The manifest may have been generated on another machine.  The
+            # project setting is the portable source of truth for Chroma data.
+            persist_path=settings.paths.chroma_dir,
         )
 
     def search(self, query: str, top_k: int | None = None) -> list[SearchResult]:
+        query = query.strip()
+        if not query:
+            raise ValueError("Search query must not be empty.")
+        requested_top_k = top_k or self.settings.top_k
+        if requested_top_k < 1:
+            raise ValueError("top_k must be at least 1.")
+        collection_size = self.collection.count()
+        if collection_size == 0:
+            return []
+
         query_embedding = self.embedding_model.embed_query(query)
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=top_k or self.settings.top_k,
+            n_results=min(requested_top_k, collection_size),
             include=["documents", "metadatas", "distances"],
         )
         ids = results.get("ids", [[]])[0]

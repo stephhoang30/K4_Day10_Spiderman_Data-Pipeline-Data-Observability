@@ -15,6 +15,8 @@ def build_agent(settings: Settings, index: LocalEmbeddingIndex):
     def semantic_search_papers(query: str, top_k: int = 4) -> str:
         """Search the local paper corpus with embeddings and return the most relevant papers."""
         results = index.search(query, top_k=top_k)
+        if not results:
+            return "No papers are currently indexed. Run the baseline pipeline first."
         lines = []
         for result in results:
             lines.append(
@@ -51,6 +53,8 @@ def build_agent(settings: Settings, index: LocalEmbeddingIndex):
 
 
 def run_agent_question(agent: Any, question: str) -> str:
+    if not question.strip():
+        raise ValueError("Question must not be empty.")
     result = agent.invoke({"messages": [{"role": "user", "content": question}]})
     messages = result.get("messages", [])
     if not messages:
