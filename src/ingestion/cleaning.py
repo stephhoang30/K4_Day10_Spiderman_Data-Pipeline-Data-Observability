@@ -281,13 +281,21 @@ def summarize_clean_dataframe(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+#: Root cua repo, suy tu vi tri module. Dung lam moc mac dinh de log luon ghi
+#: duong dan tuong doi — neu ghi tuyet doi thi moi may cho ra mot gia tri khac
+#: (/Users/... vs F:\...), artifact bi churn va lo cau truc thu muc ca nhan.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
 def _relative_to(path: Path, root: Path | None) -> str:
-    if root is None:
-        return str(path)
-    try:
-        return str(path.relative_to(root))
-    except ValueError:
-        return str(path)
+    for candidate in (root, PROJECT_ROOT):
+        if candidate is None:
+            continue
+        try:
+            return Path(path).resolve().relative_to(Path(candidate).resolve()).as_posix()
+        except ValueError:
+            continue
+    return Path(path).name
 
 
 def write_cleaning_log(
