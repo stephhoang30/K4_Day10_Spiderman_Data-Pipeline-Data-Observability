@@ -13,8 +13,11 @@ _REQUIRED_COLUMNS = {"paper_id", "title"}
 def _value_is_present(value: Any) -> bool:
     if value is None:
         return False
-    if isinstance(value, float) and pd.isna(value):
-        return False
+    try:
+        if bool(pd.isna(value)):
+            return False
+    except (TypeError, ValueError):
+        pass
     return bool(normalize_whitespace(str(value)))
 
 
@@ -57,7 +60,8 @@ def build_test_set(df: pd.DataFrame, output_path) -> list[dict[str, Any]]:
     samples: list[dict[str, Any]] = []
     ordered = df.sort_values("paper_id", kind="stable")
     for _, row in ordered.iterrows():
-        paper_id = str(row["paper_id"])
+        if not _value_is_present(row["paper_id"]):
+            raise ValueError("Every evaluation row must contain a non-empty paper_id.")
         title = normalize_whitespace(str(row["title"]))
         if not title:
             continue
@@ -98,10 +102,6 @@ def build_test_set(df: pd.DataFrame, output_path) -> list[dict[str, Any]]:
                 str(row["categories_joined"]),
                 "categories_joined",
             )
-
-        # Keep the ID conversion explicit so invalid/null IDs fail before writing.
-        if not paper_id:
-            raise ValueError("Every evaluation row must contain a non-empty paper_id.")
 
     if not samples:
         raise ValueError("No evaluation questions could be generated from the dataframe.")
