@@ -237,14 +237,15 @@ Nếu sinh lại test set từ corrupted dataset thì ground truth cũng bị h�
 
 ### Baseline metrics
 
-⏳ Chờ `data/results/baseline_metrics.json`. Không điền giá trị ước lượng vào bảng này.
+Số liệu từ `data/results/baseline_metrics.json`, 72 câu hỏi (24 paper × 3 loại). **Đọc kèm mục 11.3 trước khi kết luận** — baseline này degenerate, mọi chỉ số kịch trần do thiết kế chứ không do chất lượng.
 
 | Metric                 |       Giá trị | Diễn giải                             |
 | ---------------------- | --------------: | --------------------------------------- |
-| `retrieval_hit_rate` | ⏳ | |
-| `mean_token_f1`      | ⏳ | |
-| `judge_accuracy`     | ⏳ | |
-| `mean_judge_score`   | ⏳ | |
+| `retrieval_hit_rate` | 1.000 | Không đo được gì. 72/72 câu hỏi chứa title trong nháy đơn nên `qa.answer_question` đi vào nhánh exact lookup, ghim đúng document lên hạng 1 trước khi semantic search kịp có ý nghĩa |
+| `mean_token_f1`      | 1.000 | Tất yếu: ground truth lấy từ đúng field mà `_extract_answer` đọc ra (`authors_joined`, `published`, `first_sentence(summary)`) |
+| `judge_accuracy`     | 1.000 | **Không phải điểm của LLM.** 72/72 dùng deterministic field-aware judge; muốn gọi LLM thật phải set `RUN_LLM_JUDGE=1` |
+| `mean_judge_score`   | 5 | Như trên |
+| `mean_top_score`     | 1.000 | Hằng số gán cứng cho exact match trong `qa.answer_question`, không phải điểm cosine |
 | Ragas, nếu có        | N/A | Mặc định skip; chỉ chạy khi set `RUN_RAGAS=1`. Ragas 0.4.3 import `langchain_community.chat_models.vertexai` đã bị gỡ ở langchain-community 0.4.2, starter đã shim sẵn trong `src/evaluation/metrics.py` |
 
 ## 8. Data quality và freshness
@@ -331,7 +332,25 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 - **Cách xác minh:** Đã chạy lại `fetch_source_records(settings)` ngày 2026-08-06. Kết quả: **24/24 item có abstract**, parse ra đủ 24 `PaperRecord`, cleaning giữ nguyên 24 row và không loại record nào. Artifact đúng đường dẫn pipeline đã có trong `data/raw/`. **Vấn đề đã được xử lý** — code ingestion không sai, chỉ có snapshot `raw.json` là lấy sai tham số.
 - **Phát hiện kèm theo:** Cùng lần chạy đó cho thấy **0/24 record có field `subject`**, nên `categories` và `categories_joined` rỗng toàn bộ. Xem mục 12.
 
-### 11.2 ragas import module đã bị gỡ khỏi langchain-community
+### 11.2 Baseline degenerate: mọi metric bằng 1.000 vì đường tắt exact lookup
+
+- **Triệu chứng:** Baseline chạy xong cho `retrieval_hit_rate`, `recall@1`, `recall@k`, `MRR`, `mean_top_score`, `mean_token_f1`, `judge_accuracy` **đều đúng 1.000** trên cả 72 câu hỏi, không sai một câu nào. Một baseline không có headroom thì corruption có làm gì cũng không so sánh được tử tế.
+- **Nguyên nhân:** Ba thứ cộng lại, không cái nào là bug đơn lẻ.
+  1. `build_test_set` sinh câu hỏi có nhúng nguyên title trong nháy đơn (`When was 'JADE-Plus: ...' published?`). `qa.answer_question` bắt regex `r"'([^']+)'"` rồi gọi `index.lookup()`, tìm thấy thì chèn kết quả đó lên đầu với `score=1.0` **gán cứng**. Semantic search gần như không được dùng để quyết định.
+  2. Ground truth lấy từ đúng field mà `_extract_answer` trả về, nên `token_f1` bằng 1.0 theo cấu trúc chứ không phải theo chất lượng.
+  3. LLM judge không chạy: 72/72 dùng deterministic field-aware judge, cần `RUN_LLM_JUDGE=1` mới gọi model thật.
+- **Bằng chứng đo được:** Chạy lại retrieval thuần ngữ nghĩa, bỏ hẳn nhánh exact lookup, trên cùng test set và cùng index:
+
+  | Câu hỏi | recall@1 | recall@4 |
+  | --- | ---: | ---: |
+  | Giữ nguyên (vẫn có title) | 0.931 | 1.000 |
+  | Thay title bằng `this paper` | **0.042** | **0.167** |
+
+  Nghĩa là con số 1.000 mà pipeline báo đến từ chuỗi title khớp chính xác, không đến từ chất lượng embedding.
+- **Cách xử lý:** Thuộc thiết kế test set (Role 5), chưa sửa trong PR này để tránh giẫm chân. Đề xuất: thêm một nhóm câu hỏi **không nhúng title** để đo retrieval thật, giữ nhóm có title làm bài kiểm tra exact lookup, và báo cáo hai nhóm riêng. Đồng thời bật `RUN_LLM_JUDGE=1` cho ít nhất một lần chạy để `judge_accuracy` có nghĩa.
+- **Ảnh hưởng tới kết luận corruption:** Với baseline hiện tại, `truncate_title` sẽ phá exact lookup và làm metrics rơi mạnh — nhưng đó là bằng chứng "corruption phá đường tắt", **không phải** "corruption làm giảm chất lượng retrieval ngữ nghĩa". Phải nói rõ điều này trong mục 10, nếu không kết luận sẽ vượt quá dữ liệu.
+
+### 11.3 ragas import module đã bị gỡ khỏi langchain-community
 
 - **Triệu chứng:** `import ragas` thất bại ngay khi dựng môi trường: `ModuleNotFoundError: No module named 'langchain_community.chat_models.vertexai'`.
 - **Nguyên nhân:** ragas 0.4.3 vẫn import `langchain_community.chat_models.vertexai` ở thời điểm load module, nhưng module này đã bị gỡ trong langchain-community 0.4.2 (package đang được sunset). Hai phiên bản này cùng được resolve từ `uv.lock`.
