@@ -116,7 +116,14 @@ export default function CleanPage() {
       </Section>
 
       <DetailDrawer>
-        <Collapsible summary="Contract 16 cột" hint="pipeline_spec.clean_contract.columns">
+        <Collapsible
+          summary={
+            spec.status === "ok"
+              ? `Contract ${spec.data.clean_contract.columns.length} cột`
+              : "Contract cột"
+          }
+          hint="pipeline_spec.clean_contract.columns"
+        >
           <ArtifactBoundary state={spec} label="pipeline_spec.json">
             {(data) => <ContractGrid contract={data.clean_contract} />}
           </ArtifactBoundary>

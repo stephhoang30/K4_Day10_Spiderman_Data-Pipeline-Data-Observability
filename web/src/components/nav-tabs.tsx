@@ -25,16 +25,16 @@ export function NavTabs() {
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`inline-flex flex-col rounded-t-md border border-b-0 px-4 py-2 transition-colors ${
+                className={`inline-flex flex-col rounded-t-lg border-2 border-b-0 px-5 py-2.5 transition-colors ${
                   active
-                    ? "border-line bg-surface text-brand-blue"
+                    ? "border-brand-blue-200 bg-brand-blue-50 text-brand-blue"
                     : "border-transparent text-ink-soft hover:bg-surface/70 hover:text-brand-blue"
                 }`}
               >
-                <span className="text-sm font-semibold tracking-tight">
+                <span className="text-lg font-semibold tracking-tight">
                   {item.label}
                 </span>
-                <span className="text-[11px] text-ink-faint">{item.blurb}</span>
+                <span className="text-sm text-ink-faint">{item.blurb}</span>
               </Link>
             </li>
           );
