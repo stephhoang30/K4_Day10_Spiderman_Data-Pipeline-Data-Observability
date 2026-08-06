@@ -31,7 +31,7 @@ Môi trường đã dựng xong bằng `uv sync` trên Python 3.11.15 với toà
 
 Đã có bằng chứng sơ bộ trên sample dataset 13 record rằng corruption làm giảm chất lượng agent: retrieval hit rate 1.000 → 0.615 và số câu trả lời rỗng 0 → 7. Đây là số đo trên dữ liệu mẫu tổng hợp dùng để validate contract, **không phải** metrics của bài nộp; metrics chính thức phải lấy từ `data/results/` sau khi chạy pipeline thật trên dữ liệu Crossref.
 
-Blocker hiện tại: `src/ingestion/crossref.py` (Role 2), `src/evaluation/testset.py` và `src/observability/` (Role 5), `src/pipelines/` (Role 1) còn `NotImplementedError`, nên chưa chạy được end-to-end và chưa có artifact thật trong `data/`.
+Blocker hiện tại: `src/evaluation/testset.py` và `src/observability/` (Role 5), `src/pipelines/` (Role 1) còn `NotImplementedError`, nên chưa chạy được end-to-end và chưa có artifact thật trong `data/`. `src/ingestion/crossref.py` (Role 2) đã xong nhưng snapshot raw đang commit chưa dùng được — xem mục 11.
 
 ## 3. Kiến trúc và luồng dữ liệu
 
@@ -304,6 +304,15 @@ Nêu ít nhất hai kết luận có quan hệ nhân quả được hỗ trợ b
 Không kết luận corruption "có tác động" nếu số liệu không cho thấy thay đổi. Nếu kết quả khác kỳ vọng, mô tả giả thuyết và cách nhóm đã kiểm tra.
 
 ## 11. Vấn đề tích hợp quan trọng
+
+### 11.1 Snapshot raw không có abstract, cleaning trả về 0 row
+
+- **Triệu chứng:** Ghép ingestion (Role 2) với cleaning (Role 3) trên snapshot `data/raw/raw.json` đang commit: `parse_crossref_payload` nhận 20 item nhưng trả về 0 `PaperRecord`, kéo theo cleaned dataset rỗng và toàn bộ pipeline phía sau không có gì để chạy.
+- **Nguyên nhân:** 0/20 item trong snapshot có field `abstract`, trong khi `parse_crossref_payload` bắt buộc `paper_id`, `title` và `summary` đều không rỗng. Snapshot này được lấy về mà không kèm filter `has-abstract:true` — bằng chứng là item đầu tiên là *"Soziale Innovation"*, một chương sách tiếng Đức không liên quan tới `source_query` đã cấu hình. Ngoài ra 0/20 item có field `subject` nên `categories` cũng sẽ rỗng toàn bộ.
+- **Cách xử lý:** Hàm `fetch_source_records` bản thân đã truyền đúng `settings.source_filter`, nên chỉ cần chạy lại nó để sinh `data/raw/crossref_response.json` và `data/raw/crossref_records.json` theo đúng đường dẫn pipeline, thay vì dùng `data/raw/raw.json`. Lưu ý `data/raw/raw.json` không nằm trong `Paths` nên không có bước nào của pipeline đọc file này.
+- **Cách xác minh:** Chạy `uv run python script/run_phase1.py` rồi kiểm tra số record trong `data/raw/crossref_records.json` lớn hơn 0 và `df.attrs["cleaning_rejects"]` không loại toàn bộ row. Trước khi có dữ liệu thật, contract cleaning/corruption vẫn được bảo vệ bởi `script/validate_clean_contract.py`.
+
+### 11.2 ragas import module đã bị gỡ khỏi langchain-community
 
 - **Triệu chứng:** `import ragas` thất bại ngay khi dựng môi trường: `ModuleNotFoundError: No module named 'langchain_community.chat_models.vertexai'`.
 - **Nguyên nhân:** ragas 0.4.3 vẫn import `langchain_community.chat_models.vertexai` ở thời điểm load module, nhưng module này đã bị gỡ trong langchain-community 0.4.2 (package đang được sunset). Hai phiên bản này cùng được resolve từ `uv.lock`.
