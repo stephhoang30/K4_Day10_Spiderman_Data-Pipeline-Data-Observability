@@ -4,6 +4,7 @@ import pandas as pd
 
 from evaluation import metrics, testset
 from evaluation.testset import build_test_set
+from observability import quality
 
 
 def test_build_test_set_is_deterministic_and_skips_missing_fields(monkeypatch) -> None:
@@ -123,3 +124,69 @@ def test_evaluate_pipeline_reports_rank_and_error_type(monkeypatch) -> None:
     assert bundle.answers[1]["retrieval_rank"] == 2
     assert "metrics.json" in written
     assert "answers.json" in written
+
+
+def test_quality_checks_pass_and_write_report(monkeypatch) -> None:
+    written = {}
+    monkeypatch.setattr(quality, "write_json", lambda path, payload: written.update({str(path): payload}))
+    settings = SimpleNamespace(
+        freshness_threshold_days=180,
+        paths=SimpleNamespace(quality_dir="quality"),
+    )
+    dataframe = pd.DataFrame(
+        [
+            {"paper_id": "doi-1", "title": "A valid title", "summary_chars": 50, "age_days": 10, "published": "2026-07-01"},
+            {"paper_id": "doi-2", "title": "Another title", "summary_chars": 60, "age_days": 20, "published": "2026-06-01"},
+        ]
+    )
+
+    report = quality.run_data_quality_checks(dataframe, settings, "baseline")
+
+    assert report["status"] == "PASS"
+    assert report["failed_checks"] == 0
+    assert report["freshness"]["is_fresh"] is True
+    assert "quality\\baseline_quality.json" in written or "quality/baseline_quality.json" in written
+
+
+def test_quality_checks_fail_on_contract_and_freshness_issues(monkeypatch) -> None:
+    monkeypatch.setattr(quality, "write_json", lambda path, payload: None)
+    settings = SimpleNamespace(
+        freshness_threshold_days=180,
+        paths=SimpleNamespace(quality_dir="quality"),
+    )
+    dataframe = pd.DataFrame(
+        [
+            {"paper_id": "doi-1", "title": "", "summary_chars": 10, "age_days": 200, "published": "2026-01-01"},
+            {"paper_id": "doi-1", "title": "A valid title", "summary_chars": 50, "age_days": -1, "published": "not-a-date"},
+        ]
+    )
+
+    report = quality.run_data_quality_checks(dataframe, settings, "corrupted")
+
+    assert report["status"] == "FAIL"
+    assert report["checks"]["paper_id_unique"]["passed"] is False
+    assert report["checks"]["title_not_null"]["passed"] is False
+    assert report["checks"]["summary_length"]["passed"] is False
+    assert report["checks"]["age_days_valid"]["passed"] is False
+    assert report["freshness"]["stale_rows"] == 1
+    assert report["freshness"]["invalid_published_or_age_rows"] == 1
+
+
+def test_freshness_report_contains_date_range_and_stale_count(monkeypatch) -> None:
+    written = {}
+    monkeypatch.setattr(quality, "write_json", lambda path, payload: written.update({str(path): payload}))
+    settings = SimpleNamespace(freshness_threshold_days=180)
+    dataframe = pd.DataFrame(
+        [
+            {"published": "2026-01-01", "age_days": 200},
+            {"published": "2026-07-01", "age_days": 30},
+        ]
+    )
+
+    report = quality.build_freshness_report(dataframe, settings, "freshness.json")
+
+    assert report["latest_published"] == "2026-07-01"
+    assert report["oldest_published"] == "2026-01-01"
+    assert report["stale_rows"] == 1
+    assert report["is_fresh"] is False
+    assert "freshness.json" in written
