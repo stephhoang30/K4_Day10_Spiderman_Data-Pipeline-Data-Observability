@@ -1,0 +1,84 @@
+{
+  "generated_at": "2026-08-06T08:24:41.958176+00:00",
+  "report_name": "baseline",
+  "status": "PASS",
+  "passed": true,
+  "total_checks": 7,
+  "passed_checks": 7,
+  "failed_checks": 0,
+  "checks": {
+    "row_count": {
+      "status": "PASS",
+      "passed": true,
+      "actual": 24,
+      "expected": "> 0",
+      "message": "Dataframe ph\u1ea3i c\u00f3 \u00edt nh\u1ea5t m\u1ed9t record."
+    },
+    "paper_id_not_null": {
+      "status": "PASS",
+      "passed": true,
+      "actual": 24,
+      "expected": 24,
+      "message": "T\u1ea5t c\u1ea3 paper_id ph\u1ea3i kh\u00e1c null v\u00e0 kh\u00e1c r\u1ed7ng."
+    },
+    "paper_id_unique": {
+      "status": "PASS",
+      "passed": true,
+      "actual": 0,
+      "expected": 0,
+      "message": "paper_id kh\u00f4ng \u0111\u01b0\u1ee3c tr\u00f9ng."
+    },
+    "title_not_null": {
+      "status": "PASS",
+      "passed": true,
+      "actual": 24,
+      "expected": 24,
+      "message": "T\u1ea5t c\u1ea3 title ph\u1ea3i kh\u00e1c null v\u00e0 kh\u00e1c r\u1ed7ng."
+    },
+    "summary_length": {
+      "status": "PASS",
+      "passed": true,
+      "actual": {
+        "short_rows": 0,
+        "minimum_chars": 40
+      },
+      "expected": {
+        "short_rows": 0,
+        "minimum_chars": 40
+      },
+      "message": "summary ph\u1ea3i d\u00e0i \u00edt nh\u1ea5t 40 k\u00fd t\u1ef1."
+    },
+    "age_days_valid": {
+      "status": "PASS",
+      "passed": true,
+      "actual": 0,
+      "expected": 0,
+      "message": "age_days ph\u1ea3i parse \u0111\u01b0\u1ee3c v\u00e0 kh\u00f4ng \u00e2m."
+    },
+    "freshness": {
+      "status": "PASS",
+      "passed": true,
+      "actual": {
+        "stale_rows": 0,
+        "invalid_rows": 0
+      },
+      "expected": {
+        "stale_rows": 0,
+        "invalid_rows": 0
+      },
+      "message": "Kh\u00f4ng c\u00f3 record v\u01b0\u1ee3t ng\u01b0\u1ee1ng freshness ho\u1eb7c thi\u1ebfu tu\u1ed5i d\u1eef li\u1ec7u."
+    }
+  },
+  "freshness": {
+    "generated_at": "2026-08-06T08:24:41.958155+00:00",
+    "latest_published": "2026-08-01",
+    "oldest_published": "2026-02-12",
+    "stale_rows": 0,
+    "invalid_published_or_age_rows": 0,
+    "valid_published_rows": 24,
+    "total_rows": 24,
+    "freshness_threshold_days": 180,
+    "is_fresh": true,
+    "status": "PASS"
+  }
+}
