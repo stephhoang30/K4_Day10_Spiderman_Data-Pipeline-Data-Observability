@@ -483,12 +483,12 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 - [x] Bảng metrics khớp với các file trong `data/results/`.
 - [x] Quality/freshness conclusions khớp với `data/quality/`.
 - [x] Các đường dẫn báo cáo và artifact truy cập được.
-- [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng — 4/5 đã nộp:
+- [x] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng — **5/5 đã nộp**:
   - [x] Role 1 — Nguyễn Hoàng Bảo Minh: `report/2A202601626_NguyenHoangBaoMinh.md`
   - [x] Role 2 — Nguyễn Quý Dương: `report/Nguyễn Quý Dương_2A202601642_individual_report.md`
   - [x] Role 3 — Hoàng Công Thành: `report/Hoàng Công Thành_2A202601662_individual_report.md`
-  - [ ] Role 4 — Trần Văn Ngọc: chưa nộp
+  - [x] Role 4 — Trần Văn Ngọc: `report/individual_report TranVanNgoc_01512.md`
   - [x] Role 5 — Hồ Văn Tâm: `report/Hồ Văn Tâm_2A202601542_individual_report.md`
 
-  Lưu ý: Role 1 dùng quy ước `<MSSV>_<HoTen>.md`, ba role còn lại dùng `<Họ tên>_<MSSV>_individual_report.md`. Nên thống nhất về dạng thứ hai trước khi nộp.
+  Lưu ý về đặt tên: ba file dùng dạng `<Họ tên>_<MSSV>_individual_report.md` (Role 2, 3, 5), Role 1 dùng `<MSSV>_<HoTen>.md`, Role 4 dùng `individual_report <HoTen>_<MSSV rút gọn>.md` — có dấu cách trong tên file và MSSV bị cắt còn `01512` thay vì `2A202601512`. Nên thống nhất về dạng của Role 2/3/5 trước khi nộp; riêng dấu cách trong tên file nên bỏ vì dễ hỏng khi trích xuất hoặc chạy script.
 - [x] Không có `.env`, API key, token hoặc secret trong source, report, log hay ảnh — đã quét cả working tree lẫn toàn bộ lịch sử git (`sk-proj-`, `AIzaSy`, `ghp_`: 0 kết quả); `.env` chưa từng được commit và đang bị `.gitignore` chặn.
