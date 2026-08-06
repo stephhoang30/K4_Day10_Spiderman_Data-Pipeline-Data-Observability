@@ -33,7 +33,9 @@ Môi trường đã dựng xong bằng `uv sync` trên Python 3.11.15 với toà
 
 Ingestion và cleaning đã chạy thông trên dữ liệu Crossref thật: 24 record raw, 24 row clean, `paper_id` unique, không loại record nào. Artifact đã có trong `data/raw/`, `data/clean/` và `data/quality/cleaning_log.json`.
 
-Blocker hiện tại: `src/evaluation/testset.py` và `src/observability/` (Role 5), `src/pipelines/` (Role 1) còn `NotImplementedError`, nên chưa chạy được embedding, evaluation và report. Ngoài ra Crossref không trả `subject` cho bất kỳ record nào, làm loại câu hỏi `categories` của test set không dùng được — xem mục 12.
+Embedding index đã build được trên dữ liệu thật (collection `papers-baseline`, 24 doc) và smoke test cho thấy semantic search, exact lookup theo title lẫn `paper_id`, và agent đều trả về kết quả có nguồn — trừ câu hỏi `categories` trả lời rỗng.
+
+Blocker hiện tại: `src/evaluation/testset.py`, `src/observability/quality.py` và `src/observability/reporting.py` (Role 5) còn `NotImplementedError`, nên chưa chạy được evaluation và report. Ngoài ra Crossref không trả `subject` cho bất kỳ record nào, làm loại câu hỏi `categories` không dùng được — xem mục 12.
 
 ## 3. Kiến trúc và luồng dữ liệu
 
@@ -120,9 +122,10 @@ uv run python script/export_pipeline_spec.py
 
 | Lệnh             | Trạng thái                                    | Thời điểm chạy gần nhất | Bằng chứng                         |
 | ----------------- | ----------------------------------------------- | ----------------------------- | ------------------------------------ |
-| Baseline pipeline | Chưa chạy được — `src/pipelines/phase1.py` còn `NotImplementedError` | — | — |
-| Corruption flow   | Chưa chạy được — phụ thuộc baseline | — | — |
+| Baseline pipeline | Chưa chạy hết — `phase1.py` đã implement, dừng ở `build_test_set` và `run_data_quality_checks` (Role 5) còn `NotImplementedError` | — | Các bước trước đó đã chạy tay thành công, xem 3 dòng dưới |
+| Corruption flow   | Chưa chạy được — phụ thuộc baseline metrics và test set | — | — |
 | `validate_clean_contract.py` | Thành công — 29/29 check PASS | 2026-08-06 | Output stdout của script, không cần artifact ngoài |
+| Index + smoke test (CP2: `LocalEmbeddingIndex.build` → semantic search / exact lookup / agent) | Thành công — search có kết quả xếp hạng, lookup theo title và `paper_id` đều trúng, agent trả lời 3/4 loại câu hỏi (`categories` rỗng) | 2026-08-06 | `data/embeddings/papers_embeddings.json`, collection `papers-baseline` |
 | Ingestion + cleaning (chạy trực tiếp `fetch_source_records` → `build_clean_dataframe` → `write_clean_artifacts`) | Thành công — 24 record raw, 24 row clean, loại 0 | 2026-08-06 | `data/raw/crossref_records.json`, `data/clean/papers_clean.json`, `data/quality/cleaning_log.json` |
 
 ## 5. Ingestion, cleaning và data contract
@@ -178,6 +181,7 @@ Toàn bộ 5 cột derived được tính lại bởi một hàm duy nhất `ref
 | Dedupe theo `paper_id`, giữ bản đầu | Uniqueness | 0 | `rejects.duplicate_paper_id` |
 | Dedupe theo `title` lowercase, giữ bản đầu | Uniqueness | 0 | `rejects.duplicate_title` |
 | Strip tag JATS/HTML và unescape entity trong `title`/`summary` | Validity/Consistency | Áp dụng toàn bộ row | Check `summary` không còn ký tự `<` và `&amp;` trong `script/validate_clean_contract.py` |
+| Bỏ nhãn `Abstract` dẫn đầu summary (còn lại sau khi strip `<jats:title>`) | Validity | 8/24 | `df["summary"].str.match(r"^Abstract\b").sum() == 0`. Bắt buộc vì `qa.first_sentence(summary)` chính là answer cho câu hỏi summary — để nguyên thì ground truth bắt đầu bằng rác |
 | Chuẩn hóa `authors`/`categories`: bỏ phần tử rỗng, dedupe case-insensitive, giữ thứ tự | Consistency | Áp dụng toàn bộ row | Check trong `script/validate_clean_contract.py` |
 
 Số record bị loại và lý do được ghi vào `df.attrs["cleaning_rejects"]` khi clean, rồi `write_clean_artifacts()` ghi ra `data/quality/cleaning_log.json` — vì `df.attrs` không sống sót qua vòng ghi file nên phải có artifact riêng thì mới truy vết được. Log này còn kèm khối `signals` (row count, unique `paper_id`, số ô rỗng, khoảng `summary_chars` và `age_days`, ngày mới/cũ nhất) để Role 5 dùng thẳng cho data quality report thay vì đếm lại.
@@ -195,13 +199,22 @@ Giải thích cách nhóm tạo `text_for_embedding`, document ID và `age_days`
 | Thành phần                             | Cấu hình thực tế          |
 | ---------------------------------------- | ----------------------------- |
 | Số câu hỏi                            | ⏳ Chờ Role 5 hoàn thiện `build_test_set` |
-| Các`question_type`                    | Dự kiến: `summary`, `authors`, `date`, `categories` |
+| Các`question_type`                    | `summary`, `authors`, `date` dùng được. **`categories` không dùng được** — 0/24 record có categories nên agent trả lời rỗng (đã smoke test) |
 | Ground-truth document ID                 | Lấy từ `paper_id` của cleaned dataset, không tự sinh ID |
 | Embedding model                          | `sentence-transformers/all-MiniLM-L6-v2` |
 | Vector store/collection                  | ChromaDB, space cosine; collection `papers-baseline` / `papers-corrupted` / `papers-repaired` |
 | Retrieval`top_k`                       | `4` |
 | LLM provider/model                       | OpenAI `gpt-4o-mini` |
 | Test set dùng chung cho ba trạng thái | `data/eval/test_set.json` |
+
+Review nội dung corpus trước khi chọn row vào test set (CP2), trên 24 row clean:
+
+| Phát hiện | Số row | Khuyến nghị cho Role 5 |
+| --- | ---: | --- |
+| Không có categories | 24/24 | Bỏ hẳn `question_type = categories` |
+| Title tiếng Nga (`10.47576/2949-1894.2026.7.7.023`) | 1/24 | Không đưa vào test set tiếng Anh, ground truth sẽ lệch ngôn ngữ |
+| `first_sentence(summary)` quá ngắn (`10.21203/rs.3.rs-9770645/v1` → `"Background."`) | 1/24 | Loại khỏi câu hỏi `summary`; abstract có cấu trúc nên câu đầu không mang nội dung |
+| Title unique | 24/24 | Exact-title lookup an toàn, không có ambiguity |
 
 Giải thích vì sao test set được giữ nguyên khi đánh giá baseline, corrupted và repaired:
 
@@ -215,7 +228,7 @@ Nếu sinh lại test set từ corrupted dataset thì ground truth cũng bị h�
 | ------------------------ | -------------------------------------- | ------------ | ---------- |
 | Raw response/records     | `data/raw/`                          | Có | `crossref_response.json` + `crossref_records.json`, 24 record, fetch 2026-08-06 |
 | Cleaned dataset          | `data/clean/`                        | Có | `papers_clean.csv` + `papers_clean.json`, 24 row, 16 cột, `paper_id` unique |
-| Embedding manifest/index | `data/embeddings/`                   | Thiếu | Chờ baseline chạy |
+| Embedding manifest/index | `data/embeddings/`                   | Có | `papers_embeddings.json` + collection `papers-baseline` trong `data/chroma/`, 24 doc |
 | Evaluation set           | `data/eval/`                         | Thiếu | Chờ Role 5 |
 | Baseline metrics         | `data/results/baseline_metrics.json` | Thiếu | Chờ baseline chạy |
 | Quality/freshness        | `data/quality/`                      | Thiếu | Chờ Role 5 |

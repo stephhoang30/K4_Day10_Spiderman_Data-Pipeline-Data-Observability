@@ -5,3 +5,12 @@ lab.txt
 src/*.egg-info/
 lab/
 **/__pycache__/
+
+# Next.js frontend (web/)
+web/node_modules/
+web/.next/
+web/out/
+
+# ChromaDB binary store — regenerate bằng LocalEmbeddingIndex.build()
+data/chroma/*
+!data/chroma/.gitkeep

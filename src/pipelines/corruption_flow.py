@@ -66,6 +66,8 @@ def main() -> None:
         corrupted_df,
         settings.paths.corrupted_clean_csv,
         settings.paths.corrupted_clean_json,
+        log_path=settings.paths.quality_dir / "cleaning_log_corrupted.json",
+        state="corrupted",
     )
 
     corrupted_evaluation, corrupted_quality, corrupted_freshness = _evaluate_state(
@@ -84,6 +86,8 @@ def main() -> None:
         repaired_df,
         settings.paths.repaired_clean_csv,
         settings.paths.repaired_clean_json,
+        log_path=settings.paths.quality_dir / "cleaning_log_repaired.json",
+        state="repaired",
     )
     repaired_evaluation, repaired_quality, repaired_freshness = _evaluate_state(
         "repaired",

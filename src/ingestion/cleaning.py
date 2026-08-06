@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 import html
+import json
 from pathlib import Path
 import re
 from typing import Any
@@ -55,6 +56,14 @@ MIN_SUMMARY_CHARS = 40
 _TAG_RE = re.compile(r"</?[a-zA-Z][^>]*>")
 _LIST_SPLIT_RE = re.compile(r"[;|]")
 
+# Crossref boc abstract trong <jats:title>Abstract</jats:title>; sau khi strip tag
+# thi con lai chu "Abstract" dan dau. Phai bo vi qa.first_sentence(summary) chinh
+# la answer cho cau hoi summary — de nguyen thi ground truth bat dau bang rac.
+_ABSTRACT_LABEL_RE = re.compile(
+    r"^\s*(abstract|summary|аннотация|摘要|resumen|r[ée]sum[ée])\b[\s:.\-–—]*",
+    re.IGNORECASE,
+)
+
 
 def _record_to_dict(record: PaperRecord | dict[str, Any]) -> dict[str, Any]:
     if is_dataclass(record) and not isinstance(record, type):
@@ -73,6 +82,11 @@ def _clean_text(value: Any) -> str:
     text = html.unescape(str(value))
     text = _TAG_RE.sub(" ", text)
     return normalize_whitespace(text)
+
+
+def _strip_abstract_label(text: str) -> str:
+    """Bo nhan 'Abstract' dan dau con lai sau khi strip tag JATS."""
+    return _ABSTRACT_LABEL_RE.sub("", text, count=1).strip()
 
 
 def _clean_list(value: Any) -> list[str]:
@@ -160,6 +174,80 @@ def refresh_derived_columns(df: pd.DataFrame, run_date: datetime | date | None =
     return working
 
 
+#: State ma corruption co y pha uniqueness/completeness — gate khong ep hai muc do.
+LENIENT_STATES = {"corrupted"}
+
+_TEXT_BLOCK_LABELS = ("Title:", "Authors:", "Categories:", "Published:", "Summary:")
+
+
+class CleanContractError(ValueError):
+    """Cleaned dataframe vi pham contract, khong duoc di tiep sang index."""
+
+
+def assert_clean_contract(df: pd.DataFrame, *, state: str = "baseline") -> dict[str, Any]:
+    """Gate chan truoc khi build index. Raise CleanContractError neu vi pham.
+
+    Hai muc kiem tra:
+
+    - **Schema** — ap dung cho moi state, ke ca corrupted: du cot, `paper_id` va
+      `title` khong rong, `text_for_embedding` khong rong va con du 5 nhan,
+      `age_days` khong am. Corruption sua noi dung chu khong duoc pha schema,
+      neu pha thi index se hong va bang so sanh mat y nghia.
+    - **Chat luong** — chi ap dung cho state khong nam trong LENIENT_STATES:
+      `paper_id` unique va khong co summary rong. Corrupted co y vi pham hai
+      dieu nay nen bo qua, con baseline/repaired thi vi pham la loi that.
+    """
+    if df.empty:
+        raise CleanContractError(f"Cleaned dataset cua state '{state}' rong.")
+
+    missing = [column for column in CLEAN_COLUMNS if column not in df.columns]
+    if missing:
+        raise CleanContractError(f"State '{state}' thieu cot: {', '.join(missing)}.")
+
+    problems: list[str] = []
+
+    blank_paper_id = int((df["paper_id"].astype(str).str.strip() == "").sum())
+    if blank_paper_id:
+        problems.append(f"{blank_paper_id} row co paper_id rong")
+
+    blank_title = int((df["title"].astype(str).str.strip() == "").sum())
+    if blank_title:
+        problems.append(f"{blank_title} row co title rong")
+
+    text = df["text_for_embedding"].astype(str)
+    blank_text = int((text.str.strip() == "").sum())
+    if blank_text:
+        problems.append(f"{blank_text} row co text_for_embedding rong")
+
+    malformed = int((~text.str.startswith(_TEXT_BLOCK_LABELS[0])).sum())
+    if malformed:
+        problems.append(f"{malformed} row co text_for_embedding sai dinh dang")
+
+    negative_age = int((pd.to_numeric(df["age_days"], errors="coerce").fillna(-1) < 0).sum())
+    if negative_age:
+        problems.append(f"{negative_age} row co age_days am hoac khong parse duoc")
+
+    duplicate_paper_ids = int(len(df) - df["paper_id"].nunique())
+    empty_summaries = int((pd.to_numeric(df["summary_chars"], errors="coerce").fillna(0) == 0).sum())
+    if state not in LENIENT_STATES:
+        if duplicate_paper_ids:
+            problems.append(f"{duplicate_paper_ids} row trung paper_id")
+        if empty_summaries:
+            problems.append(f"{empty_summaries} row co summary rong")
+
+    if problems:
+        raise CleanContractError(f"State '{state}' vi pham contract: " + "; ".join(problems) + ".")
+
+    return {
+        "state": state,
+        "strict": state not in LENIENT_STATES,
+        "rows": int(len(df)),
+        "duplicate_paper_ids": duplicate_paper_ids,
+        "empty_summaries": empty_summaries,
+        "blank_text_for_embedding": blank_text,
+    }
+
+
 def summarize_clean_dataframe(df: pd.DataFrame) -> dict[str, Any]:
     """Tin hieu chat luong doc thang tu cleaned dataframe.
 
@@ -193,33 +281,37 @@ def summarize_clean_dataframe(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def write_clean_artifacts(
+def _relative_to(path: Path, root: Path | None) -> str:
+    if root is None:
+        return str(path)
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
+def write_cleaning_log(
     df: pd.DataFrame,
-    settings: Settings,
-    csv_path: Path | None = None,
-    json_path: Path | None = None,
-    log_path: Path | None = None,
+    log_path,
+    csv_path=None,
+    json_path=None,
+    project_dir: Path | None = None,
+    state: str = "baseline",
 ) -> dict[str, Any]:
-    """Ghi cleaned dataset ra CSV/JSON va ghi log ly do loai record.
+    """Ghi log count/ly do loai record ra artifact rieng.
 
-    `df.attrs` khong song sot qua vong ghi file, nen count va ly do filter/dedupe
-    phai duoc ghi thanh artifact rieng thi moi truy vet duoc. Tra ve chinh log
-    da ghi de caller dung tiep ma khong phai doc lai file.
+    `df.attrs` khong song sot qua vong ghi file, nen neu khong ghi log nay thi
+    khong con cach nao truy vet duoc record da bi filter hay dedupe.
 
-    Luu y: CSV se stringify cot `authors` va `categories` (kieu list). Ban JSON
-    moi la ban canonical de load lai.
+    Tach rieng khoi `write_clean_artifacts` de pipeline goi duoc ma khong can
+    truyen `Settings`.
     """
-    csv_path = Path(csv_path or settings.paths.clean_csv)
-    json_path = Path(json_path or settings.paths.clean_json)
-    log_path = Path(log_path or settings.paths.quality_dir / "cleaning_log.json")
-
-    write_csv(df, csv_path)
-    write_json(json_path, df.to_dict(orient="records"))
-
+    log_path = Path(log_path)
     rejects = df.attrs.get("cleaning_rejects", {})
     rows_in = df.attrs.get("rows_in", len(df))
     log = {
         "generated_at": now_utc().isoformat(),
+        "state": state,
         "rows_in": int(rows_in),
         "rows_out": int(len(df)),
         "rows_dropped": int(rows_in) - int(len(df)),
@@ -234,12 +326,45 @@ def write_clean_artifacts(
         "derived_columns": DERIVED_COLUMNS,
         "signals": summarize_clean_dataframe(df),
         "outputs": {
-            "csv": str(csv_path.relative_to(settings.paths.project_dir)),
-            "json": str(json_path.relative_to(settings.paths.project_dir)),
+            "csv": _relative_to(Path(csv_path), project_dir) if csv_path else None,
+            "json": _relative_to(Path(json_path), project_dir) if json_path else None,
             "canonical": "json",
         },
     }
     write_json(log_path, log)
+    return log
+
+
+def write_clean_artifacts(
+    df: pd.DataFrame,
+    settings: Settings,
+    csv_path: Path | None = None,
+    json_path: Path | None = None,
+    log_path: Path | None = None,
+    state: str = "baseline",
+) -> dict[str, Any]:
+    """Ghi cleaned dataset ra CSV/JSON va ghi kem cleaning log.
+
+    Tra ve chinh log da ghi de caller dung tiep ma khong phai doc lai file.
+
+    Luu y: CSV se stringify cot `authors` va `categories` (kieu list). Ban JSON
+    moi la ban canonical de load lai.
+    """
+    csv_path = Path(csv_path or settings.paths.clean_csv)
+    json_path = Path(json_path or settings.paths.clean_json)
+    log_path = Path(log_path or settings.paths.quality_dir / "cleaning_log.json")
+
+    write_csv(df, csv_path)
+    write_json(json_path, json.loads(df.to_json(orient="records", date_format="iso")))
+
+    log = write_cleaning_log(
+        df,
+        log_path,
+        csv_path=csv_path,
+        json_path=json_path,
+        project_dir=settings.paths.project_dir,
+        state=state,
+    )
     return log
 
 
@@ -276,7 +401,7 @@ def build_clean_dataframe(records: list[PaperRecord], run_date: datetime) -> pd.
             rejects["short_title"] += 1
             continue
 
-        summary = _clean_text(payload.get("summary"))
+        summary = _strip_abstract_label(_clean_text(payload.get("summary")))
         if len(summary) < MIN_SUMMARY_CHARS:
             rejects["short_summary"] += 1
             continue

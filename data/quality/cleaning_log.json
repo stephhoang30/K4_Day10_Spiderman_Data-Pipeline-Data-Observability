@@ -1,5 +1,6 @@
 {
-  "generated_at": "2026-08-06T07:57:44.700585+00:00",
+  "generated_at": "2026-08-06T08:07:28.029892+00:00",
+  "state": "baseline",
   "rows_in": 24,
   "rows_out": 24,
   "rows_dropped": 0,
@@ -55,8 +56,8 @@
     "empty_categories": 24,
     "summary_chars": {
       "min": 826,
-      "max": 2610,
-      "mean": 1727.4
+      "max": 2601,
+      "mean": 1724.0
     },
     "age_days": {
       "min": 5,
