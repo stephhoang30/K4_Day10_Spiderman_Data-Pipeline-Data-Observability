@@ -47,6 +47,9 @@
     }
   },
   "ragas": {
-    "skipped": "Set RUN_RAGAS=1 to enable the slower Ragas pass."
+    "answer_relevancy": 0.2269123907620223,
+    "context_precision": 0.9768518517585648,
+    "context_recall": 1.0,
+    "faithfulness": 0.9780092592592591
   }
 }
