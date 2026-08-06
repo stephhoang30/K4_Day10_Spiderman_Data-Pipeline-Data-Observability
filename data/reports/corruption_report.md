@@ -14,7 +14,7 @@
 | Signal | Corrupted | Repaired |
 | --- | --- | --- |
 | status | FAIL | PASS |
-| passed_checks | 4 | 7 |
+| passed_checks | 5 | 8 |
 | failed_checks | 3 | 0 |
 
 ## Freshness comparison

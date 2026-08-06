@@ -9,7 +9,7 @@
 | filter | from-pub-date:2026-02-07,has-abstract:true |
 | raw_records | 24 |
 | clean_records | 24 |
-| run_at | 2026-08-06T08:44:05.589235+00:00 |
+| run_at | 2026-08-06T08:59:29.084438+00:00 |
 
 ## Evaluation metrics
 
@@ -43,6 +43,7 @@ Overall status: **PASS**
 | paper_id_unique | PASS | 0 | 0 | paper_id không được trùng. |
 | title_not_null | PASS | 24 | 24 | Tất cả title phải khác null và khác rỗng. |
 | summary_length | PASS | {"minimum_chars": 40, "short_rows": 0} | {"minimum_chars": 40, "short_rows": 0} | summary phải dài ít nhất 40 ký tự. |
+| categories_coverage | WARNING | {"coverage": 0.0, "missing_rows": 24, "present_rows": 0} | categories are optional for this Crossref corpus | Categories thiếu ở một số record; không làm pipeline FAIL nhưng cần theo dõi coverage. |
 | age_days_valid | PASS | 0 | 0 | age_days phải parse được và không âm. |
 | freshness | PASS | {"invalid_rows": 0, "stale_rows": 0} | {"invalid_rows": 0, "stale_rows": 0} | Không có record vượt ngưỡng freshness hoặc thiếu tuổi dữ liệu. |
 

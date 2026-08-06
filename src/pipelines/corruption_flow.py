@@ -30,6 +30,7 @@ def _evaluate_state(
         test_set_path=settings.paths.eval_testset,
         metrics_output_path=metrics_path,
         answers_output_path=answers_path,
+        dataset_variant=state,
     )
     quality = run_data_quality_checks(df, settings=settings, report_name=state)
     freshness = build_freshness_report(

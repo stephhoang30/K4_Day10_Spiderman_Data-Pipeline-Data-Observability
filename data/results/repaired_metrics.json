@@ -1,5 +1,5 @@
 {
-  "dataset_variant": "baseline",
+  "dataset_variant": "repaired",
   "samples": 72,
   "retrieval_hit_rate": 1.0,
   "retrieval_recall_at_1": 1.0,

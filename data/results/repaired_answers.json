@@ -1,7 +1,7 @@
 [
   {
     "id": "qa-001-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'JADE-Plus: A Multimodal Agentic Retrieval-Augmented Generation Large Language Framework for Diagnostic Support in Jawbone Lesions: Development and Technical Validation Study' published?",
     "ground_truth": "2026-07-13",
@@ -36,7 +36,7 @@
   },
   {
     "id": "qa-002-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'JADE-Plus: A Multimodal Agentic Retrieval-Augmented Generation Large Language Framework for Diagnostic Support in Jawbone Lesions: Development and Technical Validation Study'?",
     "ground_truth": "Soroush Baseri Saadi, Jonas Ver Berne, Rocharles Cavalcante Fontenele, Peter Claes, Reinhilde Jacobs",
@@ -71,7 +71,7 @@
   },
   {
     "id": "qa-003-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'JADE-Plus: A Multimodal Agentic Retrieval-Augmented Generation Large Language Framework for Diagnostic Support in Jawbone Lesions: Development and Technical Validation Study'?",
     "ground_truth": "Diagnosing jawbone lesions in oral and maxillofacial radiology remains challenging due to overlapping radiological features and the need for integrated clinical reasoning.",
@@ -106,7 +106,7 @@
   },
   {
     "id": "qa-004-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was '0346 Retrieval Augmented Generation Improves Large Language Model Performance in Sleep Medicine' published?",
     "ground_truth": "2026-05-08",
@@ -141,7 +141,7 @@
   },
   {
     "id": "qa-005-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored '0346 Retrieval Augmented Generation Improves Large Language Model Performance in Sleep Medicine'?",
     "ground_truth": "Joseph Cheung, Pengze Li, Anshum Patel, SaiKrishna Vallamchetla, Het Contractor, Hayden Heninger, Cui Tao",
@@ -176,7 +176,7 @@
   },
   {
     "id": "qa-006-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of '0346 Retrieval Augmented Generation Improves Large Language Model Performance in Sleep Medicine'?",
     "ground_truth": "Introduction While Large Language Models (LLMs) offer generative capabilities, generic models often lack domain-specific grounding, leading to hallucinations in high-stakes contexts.",
@@ -211,7 +211,7 @@
   },
   {
     "id": "qa-007-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Hi\u2010 RAG : A Hierarchical Retrieval\u2010Augmented Generation Framework for Scalable and Generalisable Tool Selection in Large Language Model Agents' published?",
     "ground_truth": "2026-08-01",
@@ -246,7 +246,7 @@
   },
   {
     "id": "qa-008-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Hi\u2010 RAG : A Hierarchical Retrieval\u2010Augmented Generation Framework for Scalable and Generalisable Tool Selection in Large Language Model Agents'?",
     "ground_truth": "Wei Tian, Yuhao Zhou",
@@ -281,7 +281,7 @@
   },
   {
     "id": "qa-009-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Hi\u2010 RAG : A Hierarchical Retrieval\u2010Augmented Generation Framework for Scalable and Generalisable Tool Selection in Large Language Model Agents'?",
     "ground_truth": "As tool repositories for Large Language Model (LLM) agents grow from dozens to hundreds of endpoints, flat retrieval paradigms that treat the repository as an unstructured list suffer from context overload, cross\u2010domain semantic collision and degraded selection accuracy.",
@@ -316,7 +316,7 @@
   },
   {
     "id": "qa-010-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Clinical Large Language Models with Multi-Stage Instruction Tuning and Advanced Retrieval-Augmented Generation' published?",
     "ground_truth": "2026-02-12",
@@ -351,7 +351,7 @@
   },
   {
     "id": "qa-011-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Clinical Large Language Models with Multi-Stage Instruction Tuning and Advanced Retrieval-Augmented Generation'?",
     "ground_truth": "Donald Martin, Blake Bowman",
@@ -386,7 +386,7 @@
   },
   {
     "id": "qa-012-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Clinical Large Language Models with Multi-Stage Instruction Tuning and Advanced Retrieval-Augmented Generation'?",
     "ground_truth": "The demand for efficient and accurate Clinical Decision Support Systems (CDSS) is growing rapidly, driven by the escalating volume of medical data.",
@@ -421,7 +421,7 @@
   },
   {
     "id": "qa-013-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Retrieval-Augmented Large Language Model Agents for Automated Scientific Literature Review Generation' published?",
     "ground_truth": "2026-04-06",
@@ -456,7 +456,7 @@
   },
   {
     "id": "qa-014-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Retrieval-Augmented Large Language Model Agents for Automated Scientific Literature Review Generation'?",
     "ground_truth": "Ruotong Wang, Nyutian Long, Shunqi Liu, Yuxi Wang, Zhen Qi, Huajun Zhang",
@@ -491,7 +491,7 @@
   },
   {
     "id": "qa-015-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Retrieval-Augmented Large Language Model Agents for Automated Scientific Literature Review Generation'?",
     "ground_truth": "This study investigates a method that integrates retrieval-augmented mechanisms into large language model agents for scientific literature review generation.",
@@ -526,7 +526,7 @@
   },
   {
     "id": "qa-016-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Microsoft Azure artificial intelligence / machine learning hackathon for development of retrieval-augmented generation large language model' published?",
     "ground_truth": "2026-07-01",
@@ -561,7 +561,7 @@
   },
   {
     "id": "qa-017-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Microsoft Azure artificial intelligence / machine learning hackathon for development of retrieval-augmented generation large language model'?",
     "ground_truth": "Janet L. Autrey, Lacey S. Duckworth, Ashly N. Horner, Thomas Sigler, Victoria D. Moore",
@@ -596,7 +596,7 @@
   },
   {
     "id": "qa-018-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Microsoft Azure artificial intelligence / machine learning hackathon for development of retrieval-augmented generation large language model'?",
     "ground_truth": "The US Army Corps of Engineers (USACE) Civil Works (CW) research and development (R&D) mission is to address challenging environmental sustainability problems through innovative science and engineering, which helps to ensure a safer, more prosperous, and more resilient nation.",
@@ -631,7 +631,7 @@
   },
   {
     "id": "qa-019-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'SafeRAG: A Large-Language-Model-Based Multistage Retrieval-Augmented Framework for Oil and Gas Safety Report Generation' published?",
     "ground_truth": "2026-08-01",
@@ -666,7 +666,7 @@
   },
   {
     "id": "qa-020-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'SafeRAG: A Large-Language-Model-Based Multistage Retrieval-Augmented Framework for Oil and Gas Safety Report Generation'?",
     "ground_truth": "Qianwen Cao, Chiyu Zhang, Junxiong Ning, Gongru Li",
@@ -701,7 +701,7 @@
   },
   {
     "id": "qa-021-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'SafeRAG: A Large-Language-Model-Based Multistage Retrieval-Augmented Framework for Oil and Gas Safety Report Generation'?",
     "ground_truth": "In high-risk industrial settings, leveraging large language models (LLMs) for automated accident analysis and generating safety reports has emerged as an efficient workflow.",
@@ -736,7 +736,7 @@
   },
   {
     "id": "qa-022-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Retrieval-Augmented Generation (RAG), Generative AI, and Agentic AI Governance: An Integrated Enterprise Governance Prioritization Architecture' published?",
     "ground_truth": "2026-06-15",
@@ -771,7 +771,7 @@
   },
   {
     "id": "qa-023-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Retrieval-Augmented Generation (RAG), Generative AI, and Agentic AI Governance: An Integrated Enterprise Governance Prioritization Architecture'?",
     "ground_truth": "Audrey Rah, Sven Hahues",
@@ -806,7 +806,7 @@
   },
   {
     "id": "qa-024-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Retrieval-Augmented Generation (RAG), Generative AI, and Agentic AI Governance: An Integrated Enterprise Governance Prioritization Architecture'?",
     "ground_truth": "Enterprise adoption of artificial intelligence (AI) systems, including Generative AI (GenAI), Retrieval-Augmented Generation (RAG), and agentic AI, is advancing faster than many organizations can adapt their governance, audit, cybersecurity, and executive oversight practices.",
@@ -841,7 +841,7 @@
   },
   {
     "id": "qa-025-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Retrieval-Augmented Large-Language-Model-Based Time-Series Forecasting for Cross-Market Equity Analysis' published?",
     "ground_truth": "2026-07-10",
@@ -876,7 +876,7 @@
   },
   {
     "id": "qa-026-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Retrieval-Augmented Large-Language-Model-Based Time-Series Forecasting for Cross-Market Equity Analysis'?",
     "ground_truth": "Novanto Yudistira, Yanuar Putra Kharisma Adhiyasa",
@@ -911,7 +911,7 @@
   },
   {
     "id": "qa-027-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Retrieval-Augmented Large-Language-Model-Based Time-Series Forecasting for Cross-Market Equity Analysis'?",
     "ground_truth": "Time-series foundation models and retrieval-based augmentation have recently emerged as relevant tools for financial forecasting, yet it remains unclear when explicit historical retrieval helps a pre-trained probabilistic forecaster in noisy equity settings.",
@@ -946,7 +946,7 @@
   },
   {
     "id": "qa-028-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Adapting Large Language Models for Low-Resource Regulated Domains: A Fine-Tuning and Retrieval-Augmented Generation Approach to Insurance Information Delivery in Kenya' published?",
     "ground_truth": "2026-05-22",
@@ -981,7 +981,7 @@
   },
   {
     "id": "qa-029-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Adapting Large Language Models for Low-Resource Regulated Domains: A Fine-Tuning and Retrieval-Augmented Generation Approach to Insurance Information Delivery in Kenya'?",
     "ground_truth": "AMOS MBEKI NYAGAR",
@@ -1016,7 +1016,7 @@
   },
   {
     "id": "qa-030-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Adapting Large Language Models for Low-Resource Regulated Domains: A Fine-Tuning and Retrieval-Augmented Generation Approach to Insurance Information Delivery in Kenya'?",
     "ground_truth": "Background.",
@@ -1051,7 +1051,7 @@
   },
   {
     "id": "qa-031-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Operationalizing Reliability Gaps in Large Language Models: A Semi-Systematic Evidence Map of Reasoning, Factuality, Evaluation, and Retrieval-Augmented Generation' published?",
     "ground_truth": "2026-06-02",
@@ -1086,7 +1086,7 @@
   },
   {
     "id": "qa-032-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Operationalizing Reliability Gaps in Large Language Models: A Semi-Systematic Evidence Map of Reasoning, Factuality, Evaluation, and Retrieval-Augmented Generation'?",
     "ground_truth": "Kushal Budha, Nikesh Lagun",
@@ -1121,7 +1121,7 @@
   },
   {
     "id": "qa-033-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Operationalizing Reliability Gaps in Large Language Models: A Semi-Systematic Evidence Map of Reasoning, Factuality, Evaluation, and Retrieval-Augmented Generation'?",
     "ground_truth": "Large language models (LLMs) increasingly support reasoning, question answering, decision support, and retrieval-augmented knowledge work.",
@@ -1156,7 +1156,7 @@
   },
   {
     "id": "qa-034-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Does retrieval-augmented generation impact medical students\u2019 perceptions of large language models? (Preprint)' published?",
     "ground_truth": "2026-07-03",
@@ -1191,7 +1191,7 @@
   },
   {
     "id": "qa-035-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Does retrieval-augmented generation impact medical students\u2019 perceptions of large language models? (Preprint)'?",
     "ground_truth": "Rohin Athavale, Alexander Cresswell, Alice Huffman",
@@ -1226,7 +1226,7 @@
   },
   {
     "id": "qa-036-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Does retrieval-augmented generation impact medical students\u2019 perceptions of large language models? (Preprint)'?",
     "ground_truth": "BACKGROUND There is evidence of rapid adoption of large language models (LLMs) in undergraduate medical education, with medical students using it to support their learning.",
@@ -1261,7 +1261,7 @@
   },
   {
     "id": "qa-037-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Hybrid Graph Neural Network and Large Language Model Framework for Robust Knowledge Graph Question Answering via Retrieval-Augmented Generation' published?",
     "ground_truth": "2026-05-31",
@@ -1296,7 +1296,7 @@
   },
   {
     "id": "qa-038-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Hybrid Graph Neural Network and Large Language Model Framework for Robust Knowledge Graph Question Answering via Retrieval-Augmented Generation'?",
     "ground_truth": "Sohail Khan",
@@ -1331,7 +1331,7 @@
   },
   {
     "id": "qa-039-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Hybrid Graph Neural Network and Large Language Model Framework for Robust Knowledge Graph Question Answering via Retrieval-Augmented Generation'?",
     "ground_truth": "Knowledge graphs (KGs) hold facts about the world as connected triples, and they have become a backbone for any system that needs to reason over linked information.",
@@ -1366,7 +1366,7 @@
   },
   {
     "id": "qa-040-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'An Exploratory Study of Agentic Retrieval Augmented Generation for Mental Health Oriented Language Models' published?",
     "ground_truth": "2026-05-06",
@@ -1401,7 +1401,7 @@
   },
   {
     "id": "qa-041-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'An Exploratory Study of Agentic Retrieval Augmented Generation for Mental Health Oriented Language Models'?",
     "ground_truth": "Khoa Pham, Jiacheng Li, Hassan S. Al Khatib, Shahram Rahimi, Noorbakhsh Amiri Golilarz, Andy Perkins",
@@ -1436,7 +1436,7 @@
   },
   {
     "id": "qa-042-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'An Exploratory Study of Agentic Retrieval Augmented Generation for Mental Health Oriented Language Models'?",
     "ground_truth": "Mental health conditions affect over one billion individuals globally and remain challenging to assess accurately due to fragmented clinical data and subjective evaluation methods.",
@@ -1471,7 +1471,7 @@
   },
   {
     "id": "qa-043-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Hybrid Retrieval-Augmented Generation: Semantic and Structural Integration for Large Language Model Reasoning' published?",
     "ground_truth": "2026-02-26",
@@ -1506,7 +1506,7 @@
   },
   {
     "id": "qa-044-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Hybrid Retrieval-Augmented Generation: Semantic and Structural Integration for Large Language Model Reasoning'?",
     "ground_truth": "Hyewon Lee, Sungsu Lim",
@@ -1541,7 +1541,7 @@
   },
   {
     "id": "qa-045-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Hybrid Retrieval-Augmented Generation: Semantic and Structural Integration for Large Language Model Reasoning'?",
     "ground_truth": "Recent GraphRAG methods based on knowledge graphs (KGs) primarily rely on either under-reasoning or a structural path-level retriever, which prevents them from jointly capturing fine-grained semantic relevance and explicit multi-hop reasoning paths.",
@@ -1576,7 +1576,7 @@
   },
   {
     "id": "qa-046-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'An Agentic AI System for Roof Design Compliance Using Computer Vision, Retrieval-Augmented Generation and Large Language Models' published?",
     "ground_truth": "2026-07-02",
@@ -1611,7 +1611,7 @@
   },
   {
     "id": "qa-047-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'An Agentic AI System for Roof Design Compliance Using Computer Vision, Retrieval-Augmented Generation and Large Language Models'?",
     "ground_truth": "Nawari O. Nawari, Oluwatoyin O. Lawal",
@@ -1646,7 +1646,7 @@
   },
   {
     "id": "qa-048-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'An Agentic AI System for Roof Design Compliance Using Computer Vision, Retrieval-Augmented Generation and Large Language Models'?",
     "ground_truth": "Designers, engineers, and building officials face increasing pressure to accelerate and improve the accuracy of design review for buildings and infrastructure.",
@@ -1681,7 +1681,7 @@
   },
   {
     "id": "qa-049-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Implementation of Retrieval-Augmented Generation Method on Large Language Model for Development of Campus Service and Information Chatbot' published?",
     "ground_truth": "2026-02-26",
@@ -1716,7 +1716,7 @@
   },
   {
     "id": "qa-050-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Implementation of Retrieval-Augmented Generation Method on Large Language Model for Development of Campus Service and Information Chatbot'?",
     "ground_truth": "Muhammad Dzaki Salman, Rahmaddeni, Torkis Nasution, Susanti",
@@ -1751,7 +1751,7 @@
   },
   {
     "id": "qa-051-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Implementation of Retrieval-Augmented Generation Method on Large Language Model for Development of Campus Service and Information Chatbot'?",
     "ground_truth": "Large language models have the potential to improve the quality of information services in higher education environments through responsive and natural interactions.",
@@ -1786,7 +1786,7 @@
   },
   {
     "id": "qa-052-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'A Survey of (Deep RAG) Deep Retrieval Augmented Generation and Reasoning in Large Language Models' published?",
     "ground_truth": "2026-03-05",
@@ -1821,7 +1821,7 @@
   },
   {
     "id": "qa-053-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'A Survey of (Deep RAG) Deep Retrieval Augmented Generation and Reasoning in Large Language Models'?",
     "ground_truth": "Lihui Liu",
@@ -1856,7 +1856,7 @@
   },
   {
     "id": "qa-054-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'A Survey of (Deep RAG) Deep Retrieval Augmented Generation and Reasoning in Large Language Models'?",
     "ground_truth": "Retrieval-Augmented Generation (RAG) has emerged as a powerful paradigm for combining large language models with external knowledge sources to produce accurate, context-aware, and verifiable outputs.",
@@ -1891,7 +1891,7 @@
   },
   {
     "id": "qa-055-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was '\u0421\u043d\u0438\u0436\u0435\u043d\u0438\u0435 \u0440\u0438\u0441\u043a\u043e\u0432 \u043f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u0438\u044f LLM (Large Language Model) \u0432 \u0441\u0444\u0435\u0440\u0435 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u0447\u0435\u0441\u043a\u043e\u0439 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 \u043f\u0440\u0435\u0434\u043f\u0440\u0438\u044f\u0442\u0438\u0439 \u043c\u043e\u043b\u043e\u0447\u043d\u043e\u0439 \u043f\u0440\u043e\u043c\u044b\u0448\u043b\u0435\u043d\u043d\u043e\u0441\u0442\u0438 \u043d\u0430 \u043e\u0441\u043d\u043e\u0432\u0435 \u043f\u043e\u0434\u0445\u043e\u0434\u0430 RAG (Retrieval-Augmented Generation)' published?",
     "ground_truth": "2026-06-15",
@@ -1926,7 +1926,7 @@
   },
   {
     "id": "qa-056-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored '\u0421\u043d\u0438\u0436\u0435\u043d\u0438\u0435 \u0440\u0438\u0441\u043a\u043e\u0432 \u043f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u0438\u044f LLM (Large Language Model) \u0432 \u0441\u0444\u0435\u0440\u0435 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u0447\u0435\u0441\u043a\u043e\u0439 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 \u043f\u0440\u0435\u0434\u043f\u0440\u0438\u044f\u0442\u0438\u0439 \u043c\u043e\u043b\u043e\u0447\u043d\u043e\u0439 \u043f\u0440\u043e\u043c\u044b\u0448\u043b\u0435\u043d\u043d\u043e\u0441\u0442\u0438 \u043d\u0430 \u043e\u0441\u043d\u043e\u0432\u0435 \u043f\u043e\u0434\u0445\u043e\u0434\u0430 RAG (Retrieval-Augmented Generation)'?",
     "ground_truth": "\u0418.\u0412. \u0415\u0440\u043c\u0430\u043a\u043e\u0432, \u0412.\u0412. \u0424\u0438\u043b\u0430\u0442\u043e\u0432",
@@ -1961,7 +1961,7 @@
   },
   {
     "id": "qa-057-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of '\u0421\u043d\u0438\u0436\u0435\u043d\u0438\u0435 \u0440\u0438\u0441\u043a\u043e\u0432 \u043f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u0438\u044f LLM (Large Language Model) \u0432 \u0441\u0444\u0435\u0440\u0435 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u0447\u0435\u0441\u043a\u043e\u0439 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 \u043f\u0440\u0435\u0434\u043f\u0440\u0438\u044f\u0442\u0438\u0439 \u043c\u043e\u043b\u043e\u0447\u043d\u043e\u0439 \u043f\u0440\u043e\u043c\u044b\u0448\u043b\u0435\u043d\u043d\u043e\u0441\u0442\u0438 \u043d\u0430 \u043e\u0441\u043d\u043e\u0432\u0435 \u043f\u043e\u0434\u0445\u043e\u0434\u0430 RAG (Retrieval-Augmented Generation)'?",
     "ground_truth": "\u0412 \u0441\u0442\u0430\u0442\u044c\u0435 \u043f\u0440\u043e\u0432\u0435\u0434\u0435\u043d\u043e \u0438\u0441\u0441\u043b\u0435\u0434\u043e\u0432\u0430\u043d\u0438\u0435 \u043e\u0441\u043e\u0431\u0435\u043d\u043d\u043e\u0441\u0442\u0435\u0439 \u0441\u043d\u0438\u0436\u0435\u043d\u0438\u044f \u0440\u0438\u0441\u043a\u043e\u0432 \u043f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u0438\u044f LLM (Large Language Model) \u0432 \u0441\u0444\u0435\u0440\u0435 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u0447\u0435\u0441\u043a\u043e\u0439 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 \u043f\u0440\u0435\u0434\u043f\u0440\u0438\u044f\u0442\u0438\u0439 \u043c\u043e\u043b\u043e\u0447\u043d\u043e\u0439 \u043f\u0440\u043e\u043c\u044b\u0448\u043b\u0435\u043d\u043d\u043e\u0441\u0442\u0438 \u043d\u0430 \u043e\u0441\u043d\u043e\u0432\u0435 \u043f\u043e\u0434\u0445\u043e\u0434\u0430 RAG (Retrieval-Augmented Generation) \u0432 \u0441\u043e\u0432\u0440\u0435\u043c\u0435\u043d\u043d\u044b\u0445 \u0443\u0441\u043b\u043e\u0432\u0438\u044f\u0445.",
@@ -1996,7 +1996,7 @@
   },
   {
     "id": "qa-058-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Chatbot Hybrid Fatwa MUI Menggunakan Retrieval Augmented Generation dan Large Language Model' published?",
     "ground_truth": "2026-06-01",
@@ -2031,7 +2031,7 @@
   },
   {
     "id": "qa-059-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Chatbot Hybrid Fatwa MUI Menggunakan Retrieval Augmented Generation dan Large Language Model'?",
     "ground_truth": "Surya Hidayatullah Firdaus, Nazruddin Safaat H, Yelfi Vitriani, Novriyanto",
@@ -2066,7 +2066,7 @@
   },
   {
     "id": "qa-060-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Chatbot Hybrid Fatwa MUI Menggunakan Retrieval Augmented Generation dan Large Language Model'?",
     "ground_truth": "Aksesibilitas dokumen digital Fatwa Majelis Ulama Indonesia (MUI) yang terfragmentasi membuat pencarian informasi kurang efektif.",
@@ -2101,7 +2101,7 @@
   },
   {
     "id": "qa-061-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Hallucination in Large Language Models and Retrieval-Augmented Generation: Mechanisms, Mitigation, and Evaluation' published?",
     "ground_truth": "2026-06-01",
@@ -2136,7 +2136,7 @@
   },
   {
     "id": "qa-062-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Hallucination in Large Language Models and Retrieval-Augmented Generation: Mechanisms, Mitigation, and Evaluation'?",
     "ground_truth": "Haopeng Yang",
@@ -2171,7 +2171,7 @@
   },
   {
     "id": "qa-063-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Hallucination in Large Language Models and Retrieval-Augmented Generation: Mechanisms, Mitigation, and Evaluation'?",
     "ground_truth": "Large language models have demonstrated strong generative capability in question answering, dialogue, and other knowledge-intensive tasks.",
@@ -2206,7 +2206,7 @@
   },
   {
     "id": "qa-064-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'Speculative Retrieval-Augmented Generation for Cost-Efficient Large Language Model Inference' published?",
     "ground_truth": "2026-05-06",
@@ -2241,7 +2241,7 @@
   },
   {
     "id": "qa-065-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'Speculative Retrieval-Augmented Generation for Cost-Efficient Large Language Model Inference'?",
     "ground_truth": "Dr. Sumalatha P, Manoj Kumar",
@@ -2276,7 +2276,7 @@
   },
   {
     "id": "qa-066-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'Speculative Retrieval-Augmented Generation for Cost-Efficient Large Language Model Inference'?",
     "ground_truth": "This work focuses on the two crucial bottlenecks in Retrieval-Augmented Generation (RAG): high inference latency and expensive computation cost.",
@@ -2311,7 +2311,7 @@
   },
   {
     "id": "qa-067-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'The Age of Autonomous Agents: A Bibliometric Review of Agentic AI Architectures, Applications, and Emerging Challenges' published?",
     "ground_truth": "2026-06-30",
@@ -2346,7 +2346,7 @@
   },
   {
     "id": "qa-068-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'The Age of Autonomous Agents: A Bibliometric Review of Agentic AI Architectures, Applications, and Emerging Challenges'?",
     "ground_truth": "Ben J. Weber, Clara M. Hofmann, Amara N. Okoye",
@@ -2381,7 +2381,7 @@
   },
   {
     "id": "qa-069-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'The Age of Autonomous Agents: A Bibliometric Review of Agentic AI Architectures, Applications, and Emerging Challenges'?",
     "ground_truth": "The rapid evolution of large language models (LLMs) has catalyzed a shift from passive AI systems toward autonomous agentic architectures capable of reasoning, memory, tool use, and multi-agent collaboration.",
@@ -2416,7 +2416,7 @@
   },
   {
     "id": "qa-070-date",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "date",
     "question": "When was 'The Role of Retrieval-Augmented Generation in Improving Factual Accuracy for Medical Large Language Models' published?",
     "ground_truth": "2026-03-15",
@@ -2451,7 +2451,7 @@
   },
   {
     "id": "qa-071-authors",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "authors",
     "question": "Who authored 'The Role of Retrieval-Augmented Generation in Improving Factual Accuracy for Medical Large Language Models'?",
     "ground_truth": "Eason Ni",
@@ -2486,7 +2486,7 @@
   },
   {
     "id": "qa-072-summary",
-    "dataset_variant": "baseline",
+    "dataset_variant": "repaired",
     "question_type": "summary",
     "question": "What is the summary of 'The Role of Retrieval-Augmented Generation in Improving Factual Accuracy for Medical Large Language Models'?",
     "ground_truth": "Large Language Models (LLMs) that rely solely on parametric memory learned through training have demonstrated strong performance in biomedical question-answering, but their tendency to hallucinate facts and the difficulty of adjusting and adding to the learned knowledge limit their usefulness in clinical settings.",

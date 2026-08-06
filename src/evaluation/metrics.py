@@ -149,6 +149,8 @@ def _run_ragas(settings: Settings, answers: list[dict[str, Any]]) -> dict[str, A
     if os.getenv("RUN_RAGAS", "").lower() not in {"1", "true", "yes"}:
         return {"skipped": "Set RUN_RAGAS=1 to enable the slower Ragas pass."}
     try:
+        from retrieval.llm import build_llm
+
         if "langchain_community.chat_models.vertexai" not in sys.modules:
             shim = types.ModuleType("langchain_community.chat_models.vertexai")
             shim.ChatVertexAI = type("ChatVertexAI", (), {})
@@ -240,7 +242,6 @@ def _summarize_answers(
     answers: list[dict[str, Any]], dataset_variant: str, top_k: int
 ) -> dict[str, Any]:
     def summarize(items: list[dict[str, Any]]) -> dict[str, Any]:
-        ranks = [item["retrieval_rank"] for item in items if item["retrieval_rank"] is not None]
         return {
             "samples": len(items),
             "retrieval_recall_at_1": _safe_mean(
@@ -249,7 +250,9 @@ def _summarize_answers(
             "retrieval_recall_at_k": _safe_mean(
                 [float(item["retrieval_rank"] is not None and item["retrieval_rank"] <= top_k) for item in items]
             ),
-            "retrieval_mrr": _safe_mean([1.0 / rank for rank in ranks]),
+            "retrieval_mrr": _safe_mean(
+                [1.0 / item["retrieval_rank"] if item["retrieval_rank"] else 0.0 for item in items]
+            ),
             "mean_top_score": _safe_mean(
                 [item["top_score"] for item in items if item["top_score"] is not None]
             ),

@@ -25,6 +25,16 @@ def _check(status: bool, actual: Any, expected: Any, message: str) -> dict[str, 
     }
 
 
+def _warning(actual: Any, expected: Any, message: str) -> dict[str, Any]:
+    return {
+        "status": "WARNING",
+        "passed": True,
+        "actual": actual,
+        "expected": expected,
+        "message": message,
+    }
+
+
 def _parse_published_dates(df: pd.DataFrame) -> pd.Series:
     if "published" not in df.columns:
         return pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns, UTC]")
@@ -121,6 +131,34 @@ def run_data_quality_checks(df: pd.DataFrame, settings: Settings, report_name: s
         {"short_rows": 0, "minimum_chars": MIN_SUMMARY_CHARS},
         f"summary phải dài ít nhất {MIN_SUMMARY_CHARS} ký tự.",
     )
+
+    if "categories_joined" in df.columns:
+        category_rows = int(_non_blank_mask(df["categories_joined"]).sum())
+        missing_category_rows = row_count - category_rows
+        category_actual = {
+            "present_rows": category_rows,
+            "missing_rows": missing_category_rows,
+            "coverage": round(category_rows / row_count, 4) if row_count else 0.0,
+        }
+        if missing_category_rows:
+            checks["categories_coverage"] = _warning(
+                category_actual,
+                "categories are optional for this Crossref corpus",
+                "Categories thiếu ở một số record; không làm pipeline FAIL nhưng cần theo dõi coverage.",
+            )
+        else:
+            checks["categories_coverage"] = _check(
+                True,
+                category_actual,
+                {"present_rows": row_count, "missing_rows": 0, "coverage": 1.0},
+                "Tất cả record đều có category.",
+            )
+    else:
+        checks["categories_coverage"] = _warning(
+            {"present_rows": 0, "missing_rows": row_count, "coverage": 0.0},
+            "categories are optional for this Crossref corpus",
+            "Thiếu cột categories_joined; không làm pipeline FAIL nhưng cần theo dõi coverage.",
+        )
 
     if "age_days" in df.columns:
         age_days = pd.to_numeric(df["age_days"], errors="coerce")
