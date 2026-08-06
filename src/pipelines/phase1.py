@@ -8,7 +8,7 @@ from core.config import load_settings
 from core.utils import now_utc, read_json, write_csv, write_json
 from evaluation.metrics import evaluate_pipeline
 from evaluation.testset import build_test_set
-from ingestion.cleaning import build_clean_dataframe
+from ingestion.cleaning import assert_clean_contract, build_clean_dataframe, write_cleaning_log
 from ingestion.crossref import fetch_source_records, load_raw_records
 from observability.quality import build_freshness_report, run_data_quality_checks
 from observability.reporting import generate_phase1_report
@@ -37,12 +37,25 @@ def _validate_clean_dataframe(df: pd.DataFrame, *, state: str) -> None:
         raise ValueError(
             f"The {state} cleaned dataset is missing required columns: {', '.join(missing)}."
         )
+    # Gate contract cua cleaning: schema cho moi state, them uniqueness va
+    # completeness cho state khong phai corrupted.
+    assert_clean_contract(df, state=state)
 
 
-def _save_clean_artifacts(df: pd.DataFrame, csv_path, json_path) -> None:
+def _save_clean_artifacts(df: pd.DataFrame, csv_path, json_path, log_path=None, state="baseline") -> None:
     write_csv(df, csv_path)
     records = json.loads(df.to_json(orient="records", date_format="iso"))
     write_json(json_path, records)
+    if log_path is not None:
+        # df.attrs khong song sot qua vong ghi file, phai ghi log rieng thi count
+        # va ly do filter/dedupe moi truy vet duoc.
+        write_cleaning_log(
+            df,
+            log_path,
+            csv_path=csv_path,
+            json_path=json_path,
+            state=state,
+        )
 
 
 def main() -> None:
@@ -59,7 +72,13 @@ def main() -> None:
     print(f"[phase1] Cleaning {len(records)} records", flush=True)
     clean_df = build_clean_dataframe(records, run_date=run_time)
     _validate_clean_dataframe(clean_df, state="baseline")
-    _save_clean_artifacts(clean_df, settings.paths.clean_csv, settings.paths.clean_json)
+    _save_clean_artifacts(
+        clean_df,
+        settings.paths.clean_csv,
+        settings.paths.clean_json,
+        log_path=settings.paths.quality_dir / "cleaning_log.json",
+        state="baseline",
+    )
 
     print("[phase1] Building baseline index", flush=True)
     index = LocalEmbeddingIndex.build(
