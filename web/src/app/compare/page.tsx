@@ -4,20 +4,32 @@ import { useCallback, useState } from "react";
 import type { LoadState } from "@/lib/api";
 import {
   getAnswers,
-  getFreshness,
+  getCleanDataset,
+  getCorruptionLog,
   getMetrics,
   getPipelineSpec,
   getQuality,
   getReport,
   getTestSet,
 } from "@/lib/api";
+import {
+  auditGate,
+  byState,
+  corruptionImpact,
+  findConfidentlyWrong,
+  findRetrievedButEmpty,
+  readQualityReports,
+  type ConfidentlyWrong,
+  type ImpactGroup,
+  type QualityReport,
+  type SilentFailure,
+} from "@/lib/derive";
 import { formatDelta, formatInt, formatMetric } from "@/lib/format";
 import { useArtifact } from "@/lib/use-artifact";
 import {
   METRIC_KEYS,
   RUN_STATES,
   type AnswerRecord,
-  type FreshnessReport,
   type MetricKey,
   type QualityBundle,
   type RagasResult,
@@ -26,30 +38,37 @@ import {
 } from "@/lib/types";
 import { ArtifactBoundary } from "@/components/artifact-state";
 import { ArrayCell } from "@/components/cells";
+import {
+  DeltaPill,
+  Meters,
+  SeriesLegend,
+  SERIES,
+  Verdict,
+  type MeterRow,
+} from "@/components/charts";
 import { Clamp, Column, DataTable } from "@/components/data-table";
+import { DamageBars } from "@/components/diagrams";
 import { GenericJson } from "@/components/generic-json";
 import { Markdown } from "@/components/markdown";
-import { MetricBars, StateLegend, type MetricSeries } from "@/components/metric-bars";
 import {
   Badge,
   Collapsible,
-  CommandBlock,
-  Mono,
-  Note,
+  DetailDrawer,
   PageHeading,
   PageShell,
-  Panel,
   ScrollShell,
+  Section,
   StatTile,
+  Takeaway,
 } from "@/components/ui";
 
-const FRESHNESS_KNOWN_KEYS = [
-  "latest_published",
-  "oldest_published",
-  "stale_rows",
-  "total_rows",
-  "is_fresh",
-] as const;
+/** Plain-language names for the four headline metrics. Labels only — no values. */
+const METRIC_LABEL: Record<MetricKey, string> = {
+  retrieval_hit_rate: "Lấy đúng tài liệu",
+  mean_token_f1: "Trùng khớp nội dung câu trả lời",
+  judge_accuracy: "LLM judge chấm là đúng",
+  mean_judge_score: "Điểm judge trung bình",
+};
 
 export default function ComparePage() {
   const spec = useArtifact(getPipelineSpec);
@@ -57,215 +76,820 @@ export default function ComparePage() {
   const corrupted = useArtifact(useCallback(() => getMetrics("corrupted"), []));
   const repaired = useArtifact(useCallback(() => getMetrics("repaired"), []));
 
-  const freshness = useArtifact(getFreshness);
+  const baselineAnswers = useArtifact(useCallback(() => getAnswers("baseline"), []));
+  const corruptedAnswers = useArtifact(useCallback(() => getAnswers("corrupted"), []));
+  const repairedAnswers = useArtifact(useCallback(() => getAnswers("repaired"), []));
+  const corruptedRows = useArtifact(useCallback(() => getCleanDataset("corrupted"), []));
+  const log = useArtifact(getCorruptionLog);
+
   const quality = useArtifact(getQuality);
   const phase1Report = useArtifact(useCallback(() => getReport("phase1"), []));
   const corruptionReport = useArtifact(useCallback(() => getReport("corruption"), []));
   const testSet = useArtifact(getTestSet);
 
-  const [answersState, setAnswersState] = useState<RunState>("baseline");
+  const [answersState, setAnswersState] = useState<RunState>("corrupted");
   const answers = useArtifact(useCallback(() => getAnswers(answersState), [answersState]));
 
-  const byState: Record<RunState, LoadState<RunMetrics>> = {
+  const byRunState: Record<RunState, LoadState<RunMetrics>> = {
     baseline,
     corrupted,
     repaired,
   };
-  const present = RUN_STATES.filter((state) => byState[state].status === "ok");
   const baselineMetrics = baseline.status === "ok" ? baseline.data : null;
+  const present = RUN_STATES.filter((state) => byRunState[state].status === "ok");
+  const reports: Map<string, QualityReport> =
+    quality.status === "ok"
+      ? byState(readQualityReports(quality.data))
+      : new Map<string, QualityReport>();
+
+  const impact =
+    log.status === "ok" && corruptedAnswers.status === "ok"
+      ? corruptionImpact(log.data, corruptedAnswers.data)
+      : null;
+
+  const gate =
+    log.status === "ok" && corruptedRows.status === "ok" && reports.get("corrupted")
+      ? auditGate({
+          log: log.data,
+          corruptedRows: corruptedRows.data,
+          report: reports.get("corrupted")!,
+          minSummaryChars:
+            spec.status === "ok" ? spec.data.clean_contract.min_summary_chars : null,
+          freshnessThresholdDays:
+            spec.status === "ok" ? spec.data.freshness.threshold_days : null,
+        })
+      : null;
+
+  const confidentlyWrong =
+    baselineAnswers.status === "ok" &&
+    corruptedAnswers.status === "ok" &&
+    corruptedRows.status === "ok"
+      ? findConfidentlyWrong(
+          baselineAnswers.data,
+          corruptedAnswers.data,
+          corruptedRows.data,
+          repairedAnswers.status === "ok" ? repairedAnswers.data : [],
+        )
+      : null;
+
+  const silentFailure =
+    baselineAnswers.status === "ok" &&
+    corruptedAnswers.status === "ok" &&
+    corruptedRows.status === "ok"
+      ? findRetrievedButEmpty(
+          baselineAnswers.data,
+          corruptedAnswers.data,
+          corruptedRows.data,
+          log.status === "ok" ? log.data : null,
+        )
+      : null;
 
   return (
     <PageShell>
       <PageHeading
         eyebrow="Stage 8 · compare"
-        title="Data quality quyết định RAG quality"
-        lede="Ba lần chạy trên cùng một test set, khác nhau duy nhất ở chất lượng dataset được index. Chỉ những state đã có file metrics mới xuất hiện — không có dòng nào được suy đoán."
+        title="Data hỏng → câu trả lời hỏng → repair kéo lại toàn bộ"
+        lede="Ba lần chạy trên đúng một bộ câu hỏi. Xanh là baseline, đỏ là corrupted, xanh lá là repaired — màu này giữ nguyên ý nghĩa ở mọi trang."
       />
 
-      <Panel
-        title="Bảng metrics"
-        subtitle={
-          <>
-            Từ <Mono>data/results/{"{baseline,corrupted,repaired}"}_metrics.json</Mono>.
-            Delta tính so với baseline và chỉ hiện khi cả hai file cùng tồn tại.
-          </>
-        }
-        aside={
-          <Badge tone={present.length === RUN_STATES.length ? "ok" : "muted"}>
-            {present.length}/{RUN_STATES.length} state
-          </Badge>
-        }
-      >
-        <div className="flex flex-col gap-4">
-          {present.length > 0 ? (
-            <MetricsTable byState={byState} baselineMetrics={baselineMetrics} />
-          ) : null}
-          <MissingStates byState={byState} />
-        </div>
-      </Panel>
+      {present.length > 0 ? (
+        <SeriesLegend
+          states={[...present]}
+          note={
+            baselineMetrics?.samples
+              ? `${formatInt(baselineMetrics.samples)} câu hỏi mỗi lần chạy`
+              : undefined
+          }
+        />
+      ) : null}
 
-      <Panel
-        title="Biểu đồ so sánh"
-        subtitle="Mỗi metric có trục riêng vì bốn metric không đảm bảo cùng thang đo. Thanh chỉ vẽ cho state đã có file."
-      >
-        {present.length === 0 ? (
-          <p className="rounded-md border border-dashed border-line bg-canvas px-4 py-6 text-center text-sm text-ink-faint">
-            Chưa có file metrics nào — biểu đồ sẽ xuất hiện ngay khi có ít nhất một state.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <StateLegend />
-            <div className="grid gap-3 lg:grid-cols-2">
-              {METRIC_KEYS.map((metric) => (
-                <MetricBars
-                  key={metric}
-                  metric={metric}
-                  series={buildSeries(byState, metric)}
-                  baseline={
-                    baselineMetrics && typeof baselineMetrics[metric] === "number"
-                      ? (baselineMetrics[metric] as number)
-                      : null
-                  }
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </Panel>
+      <div className="grid gap-5 xl:grid-cols-2">
+        {METRIC_KEYS.map((metric) => (
+          <MetricCard
+            key={metric}
+            metric={metric}
+            byRunState={byRunState}
+            baselineMetrics={baselineMetrics}
+          />
+        ))}
+      </div>
 
-      <Panel
-        title="RAGAS"
-        subtitle="Trường ragas trong mỗi file metrics có thể là skip marker, error marker, hoặc object metric — cả ba trường hợp đều được hiển thị nguyên trạng."
-      >
-        <div className="grid gap-3 lg:grid-cols-3">
-          {RUN_STATES.map((state) => (
-            <RagasCard key={state} state={state} result={byState[state]} />
-          ))}
-        </div>
-      </Panel>
+      <VerdictRow reports={reports} quality={quality} />
 
-      <Panel
-        title="Freshness report"
-        subtitle={
-          <>
-            Từ <Mono>data/quality/freshness_report.json</Mono>. Shape chưa chốt phía Python
-            nên FE render key đã biết nếu có, và luôn đổ toàn bộ JSON thật ở dưới.
-          </>
-        }
-        aside={
-          spec.status === "ok" ? (
-            <Badge tone="blue">
-              threshold {spec.data.freshness.threshold_days} ngày
-            </Badge>
-          ) : null
-        }
-      >
-        <ArtifactBoundary state={freshness} label="freshness_report.json">
-          {(data) => <FreshnessView report={data} />}
-        </ArtifactBoundary>
-      </Panel>
-
-      <Panel
-        title="Data quality outputs"
-        subtitle="Mọi file JSON tìm thấy trong thư mục data/quality, hiển thị nguyên trạng."
-      >
-        <ArtifactBoundary state={quality} label="data/quality/*.json">
-          {(data) => <QualityView bundle={data} />}
-        </ArtifactBoundary>
-      </Panel>
-
-      <Panel
-        title="Phase 1 report"
-        subtitle={
-          <>
-            Markdown từ <Mono>data/reports/phase1_report.md</Mono>.
-          </>
-        }
-      >
-        <ArtifactBoundary state={phase1Report} label="phase1_report.md">
-          {(data) => <Markdown source={data.markdown} />}
-        </ArtifactBoundary>
-      </Panel>
-
-      <Panel
-        title="Corruption report"
-        subtitle={
-          <>
-            Markdown từ <Mono>data/reports/corruption_report.md</Mono>.
-          </>
-        }
+      <Section
+        title="Loại lỗi nào phá nhiều nhất"
+        subtitle="Mỗi câu hỏi được gán vào nhóm theo paper mà nó hỏi. Nhóm control là những câu hỏi về paper không bị đụng vào — chúng vẫn hoàn hảo, nên phần sụt còn lại đúng là do corruption."
         tone="alert"
       >
-        <ArtifactBoundary state={corruptionReport} label="corruption_report.md">
-          {(data) => <Markdown source={data.markdown} />}
-        </ArtifactBoundary>
-      </Panel>
+        {impact ? (
+          <ImpactChart impact={impact} gate={gate} />
+        ) : (
+          <PendingBlock
+            states={[log, corruptedAnswers]}
+            label="corruption_log.json + corrupted_answers.json"
+          />
+        )}
+      </Section>
 
-      <Panel
-        title="Câu trả lời từng câu hỏi"
-        subtitle={
-          <>
-            Từ <Mono>data/results/{"{state}"}_answers.json</Mono> — chỗ để xem chính xác câu
-            nào hỏng khi dataset hỏng.
-          </>
-        }
-        aside={
-          <div className="flex flex-wrap items-center gap-2">
-            {testSet.status === "ok" ? (
-              <Badge tone="neutral">test set {formatInt(testSet.data.length)}</Badge>
-            ) : null}
-            <div className="flex gap-1 rounded-md border border-line bg-canvas p-1">
-              {RUN_STATES.map((state) => (
-                <button
-                  key={state}
-                  type="button"
-                  onClick={() => setAnswersState(state)}
-                  aria-pressed={answersState === state}
-                  className={`rounded px-3 py-1 text-xs font-semibold transition-colors ${
-                    answersState === state
-                      ? "bg-brand-blue text-white"
-                      : "text-ink-soft hover:text-brand-blue"
-                  }`}
+      <Section
+        title="Agent không im lặng — nó trả lời sai một cách tự tin"
+        subtitle="Cặp câu hỏi này lấy ra từ chính hai file answers: baseline trả đúng, corrupted trả một giá trị có thật nhưng của paper khác."
+        tone="alert"
+      >
+        {confidentlyWrong ? (
+          <ConfidentlyWrongExhibit item={confidentlyWrong} />
+        ) : (
+          <PendingBlock
+            states={[baselineAnswers, corruptedAnswers, corruptedRows]}
+            label="baseline_answers.json + corrupted_answers.json"
+            emptyMessage="Không có câu nào thoả điều kiện baseline đúng / corrupted sai với câu trả lời khác rỗng."
+          />
+        )}
+      </Section>
+
+      <Section
+        title="Lấy đúng tài liệu vẫn không đủ"
+        subtitle="Retrieval trả về đúng paper cần tìm, nhưng trường mà câu trả lời cần đã bị corruption xoá rỗng từ trước."
+        tone="alert"
+      >
+        {silentFailure ? (
+          <SilentFailureExhibit item={silentFailure} />
+        ) : (
+          <PendingBlock
+            states={[baselineAnswers, corruptedAnswers, corruptedRows]}
+            label="corrupted_answers.json"
+            emptyMessage="Không có câu nào retrieval_hit = true mà answer rỗng."
+          />
+        )}
+      </Section>
+
+      <DetailDrawer>
+        <Collapsible summary="Bảng metrics đầy đủ" hint="data/results/*_metrics.json">
+          {present.length > 0 ? (
+            <MetricsTable byRunState={byRunState} baselineMetrics={baselineMetrics} />
+          ) : (
+            <PendingBlock
+              states={RUN_STATES.map((state) => byRunState[state])}
+              label="*_metrics.json"
+            />
+          )}
+        </Collapsible>
+
+        <Collapsible summary="RAGAS" hint="trường ragas trong mỗi file metrics">
+          <div className="grid gap-3 lg:grid-cols-3">
+            {RUN_STATES.map((state) => (
+              <div key={state} className="rounded-lg border border-line bg-canvas p-4">
+                <Badge
+                  tone={
+                    state === "baseline" ? "blue" : state === "corrupted" ? "red" : "ok"
+                  }
                 >
                   {state}
-                </button>
-              ))}
-            </div>
+                </Badge>
+                <div className="mt-3">
+                  <RagasBody result={byRunState[state]} />
+                </div>
+              </div>
+            ))}
           </div>
-        }
-      >
-        <ArtifactBoundary state={answers} label={`${answersState}_answers.json`}>
-          {(rows) => <AnswersTable rows={rows} />}
-        </ArtifactBoundary>
-      </Panel>
+        </Collapsible>
+
+        <Collapsible summary="Toàn bộ output data quality" hint="data/quality/*.json">
+          <ArtifactBoundary state={quality} label="data/quality/*.json">
+            {(data) => <QualityView bundle={data} />}
+          </ArtifactBoundary>
+        </Collapsible>
+
+        <Collapsible summary="Phase 1 report" hint="data/reports/phase1_report.md">
+          <ArtifactBoundary state={phase1Report} label="phase1_report.md">
+            {(data) => <Markdown source={data.markdown} />}
+          </ArtifactBoundary>
+        </Collapsible>
+
+        <Collapsible summary="Corruption report" hint="data/reports/corruption_report.md">
+          <ArtifactBoundary state={corruptionReport} label="corruption_report.md">
+            {(data) => <Markdown source={data.markdown} />}
+          </ArtifactBoundary>
+        </Collapsible>
+
+        <Collapsible
+          summary="Câu trả lời từng câu hỏi"
+          hint="data/results/{state}_answers.json"
+        >
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {testSet.status === "ok" ? (
+                <Badge tone="neutral">test set {formatInt(testSet.data.length)}</Badge>
+              ) : null}
+              <div className="flex gap-1 rounded-md border border-line bg-canvas p-1">
+                {RUN_STATES.map((state) => (
+                  <button
+                    key={state}
+                    type="button"
+                    onClick={() => setAnswersState(state)}
+                    aria-pressed={answersState === state}
+                    className={`rounded px-3 py-1 text-sm font-semibold transition-colors ${
+                      answersState === state
+                        ? "bg-brand-blue text-white"
+                        : "text-ink-soft hover:text-brand-blue"
+                    }`}
+                  >
+                    {state}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <ArtifactBoundary state={answers} label={`${answersState}_answers.json`}>
+              {(rows) => <AnswersTable rows={rows} />}
+            </ArtifactBoundary>
+          </div>
+        </Collapsible>
+      </DetailDrawer>
     </PageShell>
   );
 }
 
 /* -------------------------------------------------------------------------- */
+/* Headline: one card per metric, three meters inside                          */
+/* -------------------------------------------------------------------------- */
 
-function buildSeries(
-  byState: Record<RunState, LoadState<RunMetrics>>,
-  metric: MetricKey,
-): MetricSeries[] {
-  return RUN_STATES.flatMap((state) => {
-    const result = byState[state];
-    if (result.status !== "ok") return [];
-    const value = result.data?.[metric];
-    if (typeof value !== "number" || !Number.isFinite(value)) return [];
-    return [{ state, value }];
-  });
-}
-
-function MetricsTable({
-  byState,
+function MetricCard({
+  metric,
+  byRunState,
   baselineMetrics,
 }: {
-  byState: Record<RunState, LoadState<RunMetrics>>;
+  metric: MetricKey;
+  byRunState: Record<RunState, LoadState<RunMetrics>>;
+  baselineMetrics: RunMetrics | null;
+}) {
+  const rows: MeterRow[] = [];
+  const values: number[] = [];
+
+  for (const state of RUN_STATES) {
+    const entry = byRunState[state];
+    if (entry.status !== "ok") continue;
+    const value = entry.data?.[metric];
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    values.push(value);
+    rows.push({
+      key: state,
+      name: state,
+      value,
+      display: formatMetric(value, 3),
+      fill: SERIES[state].fill,
+      track: SERIES[state].track,
+      badge: (
+        <DeltaPill
+          delta={
+            state === "baseline" ? null : formatDelta(value, baselineMetrics?.[metric], 3)
+          }
+        />
+      ),
+    });
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-line bg-surface px-6 py-8">
+        <h3 className="text-xl font-semibold text-ink">{METRIC_LABEL[metric]}</h3>
+        <p className="mt-2 text-base text-ink-faint">
+          Chưa có state nào có giá trị cho <span className="font-mono">{metric}</span>.
+        </p>
+      </div>
+    );
+  }
+
+  const observedMax = Math.max(...values);
+  const domainMax = observedMax <= 1 ? 1 : Math.ceil(observedMax);
+
+  return (
+    <div className="rounded-2xl border border-line bg-surface px-6 py-5">
+      <h3 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+        {METRIC_LABEL[metric]}
+      </h3>
+      <p className="mb-4 font-mono text-sm text-ink-faint">
+        {metric} · trục 0 → {domainMax}
+      </p>
+      <Meters rows={rows} domainMax={domainMax} labelWidth="6.5rem" />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+function VerdictRow({
+  reports,
+  quality,
+}: {
+  reports: Map<string, QualityReport>;
+  quality: LoadState<QualityBundle>;
+}) {
+  if (reports.size === 0) {
+    return (
+      <PendingBlock states={[quality]} label="data/quality/*.json" />
+    );
+  }
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      {RUN_STATES.map((state) => {
+        const report = reports.get(state);
+        if (!report) return null;
+        const fresh = report.freshness;
+        return (
+          <div
+            key={state}
+            className="flex flex-col gap-3 rounded-2xl border border-line bg-surface px-5 py-4"
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <span
+                aria-hidden
+                className="inline-block h-3.5 w-3.5 rounded-sm"
+                style={{ backgroundColor: SERIES[state].fill }}
+              />
+              <span className="text-lg font-bold text-ink">{state}</span>
+              <span className="ml-auto">
+                <Verdict status={report.status} passed={report.passed} size="lg" />
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-base text-ink-soft">
+              <span>
+                quality checks{" "}
+                <span className="font-mono font-semibold text-ink">
+                  {report.passedChecks ?? "—"}/{report.totalChecks ?? "—"}
+                </span>
+              </span>
+              {fresh ? (
+                <span className="flex items-center gap-2">
+                  freshness
+                  <Verdict status={fresh.status} passed={fresh.isFresh} size="sm" />
+                  {typeof fresh.staleRows === "number" ? (
+                    <span className="text-ink-faint">{fresh.staleRows} stale</span>
+                  ) : null}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Per-corruption-type damage                                                  */
+/* -------------------------------------------------------------------------- */
+
+function ImpactChart({
+  impact,
+  gate,
+}: {
+  impact: ReturnType<typeof corruptionImpact>;
+  gate: ReturnType<typeof auditGate> | null;
+}) {
+  const ordered = [...impact.groups].sort((a, b) => a.tokenF1 - b.tokenF1);
+  const worst = ordered[0];
+  const best = ordered[ordered.length - 1];
+
+  return (
+    <div className="flex flex-col gap-6">
+      {worst && best && worst.type !== best.type ? (
+        <Takeaway
+          tone="red"
+          figure={
+            gate ? (
+              <div className="text-right">
+                <p className="text-6xl font-semibold leading-none text-brand-red">
+                  {gate.invisibleCount}/{gate.items.length}
+                </p>
+                <p className="text-base text-ink-soft">dạng lỗi quality gate không thấy</p>
+              </div>
+            ) : undefined
+          }
+        >
+          <span className="font-mono">{worst.type}</span> kéo token_f1 xuống{" "}
+          <span className="text-brand-red">{formatMetric(worst.tokenF1, 3)}</span>, còn{" "}
+          <span className="font-mono">{best.type}</span> gần như không gây thiệt hại gì (
+          {formatMetric(best.tokenF1, 3)}).
+        </Takeaway>
+      ) : null}
+
+      <DamageBars
+        groups={impact.groups}
+        control={impact.control}
+        gateItems={gate?.items ?? []}
+      />
+
+      <GroupFacts impact={impact} gate={gate} />
+
+      <p className="text-base text-ink-soft">
+        {impact.sharedPaperIds.length > 0 ? (
+          <>
+            {impact.sharedPaperIds.length} paper bị nhiều hơn một dạng lỗi chạm vào, nên{" "}
+            {impact.multiGroupQuestions} câu hỏi được tính ở hai nhóm.{" "}
+          </>
+        ) : null}
+        {gate && gate.datasetLevelFailures.length > 0 ? (
+          <>
+            Check <span className="font-mono">{gate.datasetLevelFailures.join(", ")}</span>{" "}
+            chạy trên cả dataset nên không quy được về dòng nào.
+          </>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
+/** The same groups as the chart, with the numbers the bars do not carry. */
+function GroupFacts({
+  impact,
+  gate,
+}: {
+  impact: ReturnType<typeof corruptionImpact>;
+  gate: ReturnType<typeof auditGate> | null;
+}) {
+  const gateByType = new Map((gate?.items ?? []).map((item) => [item.type, item]));
+  const ordered = [...impact.groups].sort((a, b) => a.tokenF1 - b.tokenF1);
+  const all: ImpactGroup[] = impact.control ? [...ordered, impact.control] : ordered;
+
+  return (
+    <ScrollShell>
+      <table className="w-full min-w-max border-collapse text-left">
+        <thead>
+          <tr className="border-b border-line">
+            {["nhóm", "dòng", "câu hỏi", "hit rate", "token f1", "judge", "quality gate"].map(
+              (header) => (
+                <th
+                  key={header}
+                  className="px-3 py-2 text-sm font-semibold uppercase tracking-wide text-ink-faint"
+                >
+                  {header}
+                </th>
+              ),
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {all.map((group) => {
+            const detail = group.type ? gateByType.get(group.type) : undefined;
+            return (
+              <tr
+                key={group.type ?? "__control__"}
+                className="border-b border-line-soft last:border-b-0"
+              >
+                <th
+                  scope="row"
+                  className="whitespace-nowrap px-3 py-2 text-left font-mono text-base font-semibold text-ink"
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="inline-block h-3 w-3 rounded-sm"
+                      style={{
+                        backgroundColor:
+                          group.type === null ? SERIES.baseline.fill : SERIES.corrupted.fill,
+                      }}
+                    />
+                    {group.type ?? "không bị đụng"}
+                  </span>
+                </th>
+                <td className="px-3 py-2 font-mono tabular-nums text-ink-soft">
+                  {group.rowsAffected === null ? "—" : formatInt(group.rowsAffected)}
+                </td>
+                <td className="px-3 py-2 font-mono tabular-nums text-ink-soft">
+                  {formatInt(group.questions)}
+                </td>
+                <td className="px-3 py-2 font-mono tabular-nums text-ink">
+                  {formatMetric(group.hitRate, 3)}
+                </td>
+                <td className="px-3 py-2 font-mono tabular-nums text-ink">
+                  {formatMetric(group.tokenF1, 3)}
+                </td>
+                <td className="px-3 py-2 font-mono tabular-nums text-ink">
+                  {formatMetric(group.judgeAccuracy, 3)}
+                </td>
+                <td className="px-3 py-2">
+                  {detail ? (
+                    detail.visible ? (
+                      <span className="whitespace-nowrap font-mono text-sm text-ok">
+                        ✓ {detail.caughtBy.join(", ")}
+                      </span>
+                    ) : (
+                      <span className="whitespace-nowrap text-sm font-bold text-brand-red-700">
+                        không check nào bắt
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-sm text-ink-faint">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </ScrollShell>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Exhibit 1 — confidently wrong                                               */
+/* -------------------------------------------------------------------------- */
+
+function ConfidentlyWrongExhibit({ item }: { item: ConfidentlyWrong }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="rounded-xl border border-line bg-canvas px-5 py-4">
+        <p className="text-sm font-semibold uppercase tracking-wide text-ink-faint">
+          Câu hỏi · <span className="font-mono normal-case">{item.id}</span>
+        </p>
+        <p className="mt-1 text-xl leading-snug text-ink">{item.question}</p>
+        <p className="mt-2 text-base text-ink-soft">
+          Đáp án đúng:{" "}
+          <span className="font-mono text-lg font-semibold text-ink">
+            {item.groundTruth}
+          </span>
+        </p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <AnswerSide
+          state="baseline"
+          answer={item.baselineAnswer}
+          score={item.baselineScore}
+          hit={item.baselineHit}
+          correct
+        />
+        <AnswerSide
+          state="corrupted"
+          answer={item.corruptedAnswer}
+          score={item.corruptedScore}
+          hit={item.corruptedHit}
+          correct={false}
+        />
+        {item.repaired ? (
+          <AnswerSide
+            state="repaired"
+            answer={item.repaired.answer}
+            score={item.repaired.score}
+            hit={item.repaired.hit}
+            correct={item.repaired.correct}
+          />
+        ) : (
+          <div className="rounded-xl border border-dashed border-line bg-canvas px-5 py-4 text-base text-ink-faint">
+            Chưa có <span className="font-mono">repaired_answers.json</span>.
+          </div>
+        )}
+      </div>
+
+      {item.borrowedFrom ? (
+        <div className="rounded-xl border-2 border-brand-red-200 bg-brand-red-50 px-5 py-4">
+          <p className="text-xl font-semibold leading-snug text-ink">
+            <span className="font-mono">{item.corruptedAnswer}</span> không phải con số bịa —
+            nó là trường{" "}
+            <span className="font-mono">{item.borrowedFrom.field}</span> của một paper khác
+            trong chính dataset.
+          </p>
+          <p className="break-anywhere mt-2 font-mono text-base text-ink-soft">
+            {item.borrowedFrom.paperId}
+          </p>
+          {item.borrowedFrom.title ? (
+            <p className="mt-1 text-base text-ink-soft">{item.borrowedFrom.title}</p>
+          ) : null}
+          {item.repeats > 1 ? (
+            <p className="mt-2 text-base font-semibold text-brand-red-700">
+              Cùng giá trị sai này xuất hiện ở {item.repeats} câu trả lời khác nhau.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One run's answer to the same question. The wrong one is meant to read as
+ * wrong from the back of the room: red frame, red hatch, a struck-through value
+ * and an ✕ verdict.
+ */
+function AnswerSide({
+  state,
+  answer,
+  score,
+  hit,
+  correct,
+}: {
+  state: RunState;
+  answer: string;
+  score: number | null;
+  hit: boolean;
+  correct: boolean | null;
+}) {
+  const series = SERIES[state];
+  const wrong = correct === false;
+  return (
+    <div
+      className="relative flex flex-col gap-3 overflow-hidden rounded-xl border-2 px-5 py-4"
+      style={{
+        borderColor: wrong ? "var(--color-brand-red)" : series.fill,
+        backgroundColor: wrong ? "var(--color-brand-red-50)" : "var(--color-surface)",
+      }}
+    >
+      {wrong ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(135deg, transparent 0 10px, var(--color-brand-red-100) 10px 12px)",
+          }}
+        />
+      ) : null}
+
+      <div className="relative flex items-center gap-2.5">
+        <span
+          aria-hidden
+          className="inline-block h-3.5 w-3.5 rounded-sm"
+          style={{ backgroundColor: series.fill }}
+        />
+        <span className="text-lg font-bold text-ink">{state}</span>
+        <span
+          className={`ml-auto rounded-full border px-3 py-1 text-sm font-bold ${
+            wrong
+              ? "border-brand-red-200 bg-surface text-brand-red-700"
+              : correct === true
+                ? "border-ok-200 bg-surface text-ok"
+                : "border-line bg-surface text-ink-faint"
+          }`}
+        >
+          {wrong ? "✕ judge: sai" : correct === true ? "✓ judge: đúng" : "judge: —"}
+        </span>
+      </div>
+
+      <p
+        className="break-anywhere relative text-4xl font-semibold leading-tight"
+        style={{
+          color: wrong ? "var(--color-brand-red)" : series.fill,
+          textDecoration: wrong ? "line-through" : undefined,
+          textDecorationThickness: wrong ? 3 : undefined,
+        }}
+      >
+        {answer || "(rỗng)"}
+      </p>
+
+      <p className="relative text-base text-ink-soft">
+        judge score <span className="font-mono">{formatMetric(score, 1)}</span> · retrieval
+        hit{" "}
+        <span className={hit ? "font-semibold text-ok" : "font-semibold text-brand-red-700"}>
+          {String(hit)}
+        </span>
+      </p>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Exhibit 2 — retrieved, but empty                                            */
+/* -------------------------------------------------------------------------- */
+
+function SilentFailureExhibit({ item }: { item: SilentFailure }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl border-2 border-ok-200 bg-ok-50 px-5 py-4">
+          <p className="text-base font-semibold uppercase tracking-wide text-ink-faint">
+            retrieval_hit
+          </p>
+          <p className="mt-1 text-5xl font-semibold text-ok">true</p>
+          <p className="mt-1 text-base text-ink-soft">đúng paper đã được lấy về</p>
+        </div>
+        <div className="rounded-xl border-2 border-brand-red-200 bg-brand-red-50 px-5 py-4">
+          <p className="text-base font-semibold uppercase tracking-wide text-ink-faint">
+            answer
+          </p>
+          <p className="mt-1 text-5xl font-semibold text-brand-red">
+            {item.corruptedAnswer.trim() === "" ? "rỗng" : item.corruptedAnswer}
+          </p>
+          <p className="mt-1 text-base text-ink-soft">
+            token_f1 {formatMetric(item.corruptedTokenF1, 3)} · judge{" "}
+            {formatMetric(item.corruptedScore, 1)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-line bg-canvas px-5 py-4">
+          <p className="text-base font-semibold uppercase tracking-wide text-ink-faint">
+            summary_chars của paper đó
+          </p>
+          <p className="mt-1 text-5xl font-semibold text-ink">
+            {item.summaryChars === null ? "—" : formatInt(item.summaryChars)}
+          </p>
+          {item.corruptionType ? (
+            <p className="mt-1 break-anywhere font-mono text-base text-brand-red-700">
+              {item.corruptionType}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-line bg-canvas px-5 py-4">
+        <p className="text-sm font-semibold uppercase tracking-wide text-ink-faint">
+          Câu hỏi · <span className="font-mono normal-case">{item.id}</span>
+        </p>
+        <p className="mt-1 text-xl leading-snug text-ink">{item.question}</p>
+        <div className="mt-3 grid gap-4 lg:grid-cols-2">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-brand-blue">
+              baseline trả lời
+            </p>
+            <p className="break-anywhere mt-1 text-base leading-relaxed text-ink">
+              {item.baselineAnswer || "(rỗng)"}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-brand-red-700">
+              corrupted trả lời
+            </p>
+            <p className="break-anywhere mt-1 text-base leading-relaxed text-ink">
+              {item.corruptedAnswer || "(rỗng)"}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Shared empty / pending block                                                */
+/* -------------------------------------------------------------------------- */
+
+function PendingBlock({
+  states,
+  label,
+  emptyMessage,
+}: {
+  states: LoadState<unknown>[];
+  label: string;
+  emptyMessage?: string;
+}) {
+  const missing = states.filter((state) => state.status === "missing");
+  const errors = states.filter((state) => state.status === "error");
+  const loading = states.some((state) => state.status === "loading");
+
+  if (loading && missing.length === 0 && errors.length === 0) {
+    return <p className="text-lg text-ink-faint">Đang đọc {label}…</p>;
+  }
+  if (missing.length > 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-brand-blue-200 bg-brand-blue-50/60 px-5 py-5">
+        <p className="text-lg text-ink-soft">
+          Chưa có artifact cần thiết. Không có giá trị nào được điền thay.
+        </p>
+        <ul className="mt-3 flex flex-col gap-1">
+          {missing.map((state) => (
+            <li
+              key={state.status === "missing" ? state.path : ""}
+              className="break-anywhere font-mono text-base text-ink"
+            >
+              {state.status === "missing" ? state.path : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  if (errors.length > 0) {
+    return (
+      <div className="flex flex-col gap-2">
+        {errors.map((state, index) => (
+          <p
+            key={index}
+            className="break-anywhere rounded-md border border-brand-red-200 bg-brand-red-50 px-3 py-2 text-base text-brand-red-700"
+          >
+            {state.status === "error" ? state.message : null}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <p className="rounded-xl border border-dashed border-line bg-canvas px-5 py-6 text-center text-lg text-ink-faint">
+      {emptyMessage ?? `Không tìm thấy dữ liệu phù hợp trong ${label}.`}
+    </p>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Demoted detail                                                              */
+/* -------------------------------------------------------------------------- */
+
+function MetricsTable({
+  byRunState,
+  baselineMetrics,
+}: {
+  byRunState: Record<RunState, LoadState<RunMetrics>>;
   baselineMetrics: RunMetrics | null;
 }) {
   const rows = RUN_STATES.flatMap((state) => {
-    const result = byState[state];
+    const result = byRunState[state];
     return result.status === "ok" ? [{ state, metrics: result.data }] : [];
   });
 
@@ -298,9 +922,7 @@ function MetricsTable({
       render: (row) => {
         const value = row.metrics?.[metric];
         const delta =
-          row.state === "baseline"
-            ? null
-            : formatDelta(value, baselineMetrics?.[metric]);
+          row.state === "baseline" ? null : formatDelta(value, baselineMetrics?.[metric]);
         return (
           <span className="flex flex-col items-end">
             <span className="font-mono tabular-nums text-ink">{formatMetric(value)}</span>
@@ -333,130 +955,37 @@ function MetricsTable({
   );
 }
 
-function MissingStates({
-  byState,
-}: {
-  byState: Record<RunState, LoadState<RunMetrics>>;
-}) {
-  const missing = RUN_STATES.flatMap((state) => {
-    const result = byState[state];
-    if (result.status === "missing") {
-      return [{ state, path: result.path, hint: result.hint }];
-    }
-    return [];
-  });
-
-  const loading = RUN_STATES.some((state) => byState[state].status === "loading");
-  const errors = RUN_STATES.flatMap((state) => {
-    const result = byState[state];
-    return result.status === "error" ? [{ state, message: result.message }] : [];
-  });
-
-  if (loading && missing.length === 0 && errors.length === 0) {
-    return <p className="text-sm text-ink-faint">Đang đọc file metrics…</p>;
-  }
-
-  if (missing.length === 0 && errors.length === 0) return null;
-
-  const commands = Array.from(new Set(missing.map((item) => item.hint).filter(Boolean)));
-
-  return (
-    <div className="flex flex-col gap-3">
-      {missing.length > 0 ? (
-        <div className="rounded-lg border border-dashed border-brand-blue-200 bg-brand-blue-50/60 px-5 py-5">
-          <span className="inline-flex items-center rounded-full border border-brand-blue-200 bg-surface px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-blue">
-            {missing.length} state chưa có metrics
-          </span>
-          <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-            Những state dưới đây không được vẽ vào bảng hay biểu đồ. Không có giá trị nào
-            được điền thay.
-          </p>
-          <ul className="mt-3 flex flex-col gap-1.5">
-            {missing.map((item) => (
-              <li key={item.state} className="flex flex-wrap items-center gap-2">
-                <Badge tone="muted">{item.state}</Badge>
-                <span className="break-anywhere font-mono text-[12.5px] text-ink">
-                  {item.path}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-3 flex flex-col gap-1.5">
-            {commands.map((command) => (
-              <CommandBlock key={command} command={command} />
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {errors.map((item) => (
-        <p
-          key={item.state}
-          className="break-anywhere rounded-md border border-brand-red-200 bg-brand-red-50 px-3 py-2 text-sm text-brand-red-700"
-        >
-          <span className="font-semibold">{item.state}</span>: {item.message}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-
-function RagasCard({
-  state,
-  result,
-}: {
-  state: RunState;
-  result: LoadState<RunMetrics>;
-}) {
-  return (
-    <div className="rounded-lg border border-line bg-canvas p-4">
-      <div className="flex items-center gap-2">
-        <Badge
-          tone={state === "baseline" ? "blue" : state === "corrupted" ? "red" : "ok"}
-        >
-          {state}
-        </Badge>
-      </div>
-      <div className="mt-3">
-        <RagasBody result={result} />
-      </div>
-    </div>
-  );
-}
-
 function RagasBody({ result }: { result: LoadState<RunMetrics> }) {
   if (result.status === "loading") {
-    return <p className="text-xs text-ink-faint">Đang đọc…</p>;
+    return <p className="text-sm text-ink-faint">Đang đọc…</p>;
   }
   if (result.status === "missing") {
     return (
-      <p className="break-anywhere text-xs text-ink-faint">
+      <p className="break-anywhere text-sm text-ink-faint">
         Chưa có <span className="font-mono">{result.path}</span>
       </p>
     );
   }
   if (result.status === "error") {
-    return <p className="break-anywhere text-xs text-brand-red-700">{result.message}</p>;
+    return <p className="break-anywhere text-sm text-brand-red-700">{result.message}</p>;
   }
 
   const ragas: RagasResult | null | undefined = result.data?.ragas;
   if (ragas === null || ragas === undefined) {
     return (
-      <p className="text-xs text-ink-faint">
+      <p className="text-sm text-ink-faint">
         File metrics không có trường <span className="font-mono">ragas</span>.
       </p>
     );
   }
   if (typeof ragas !== "object") {
-    return <p className="break-anywhere font-mono text-xs">{String(ragas)}</p>;
+    return <p className="break-anywhere font-mono text-sm">{String(ragas)}</p>;
   }
   if ("skipped" in ragas && typeof ragas.skipped === "string") {
     return (
       <div className="flex flex-col gap-1.5">
         <Badge tone="muted">skipped</Badge>
-        <p className="break-anywhere text-xs text-ink-soft">{ragas.skipped}</p>
+        <p className="break-anywhere text-sm text-ink-soft">{ragas.skipped}</p>
       </div>
     );
   }
@@ -464,61 +993,11 @@ function RagasBody({ result }: { result: LoadState<RunMetrics> }) {
     return (
       <div className="flex flex-col gap-1.5">
         <Badge tone="red">error</Badge>
-        <p className="break-anywhere text-xs text-brand-red-700">{ragas.error}</p>
+        <p className="break-anywhere text-sm text-brand-red-700">{ragas.error}</p>
       </div>
     );
   }
   return <GenericJson value={ragas} />;
-}
-
-/* -------------------------------------------------------------------------- */
-
-function FreshnessView({ report }: { report: FreshnessReport }) {
-  const isObject =
-    typeof report === "object" && report !== null && !Array.isArray(report);
-  const known = isObject
-    ? FRESHNESS_KNOWN_KEYS.filter((key) => key in report)
-    : [];
-  const record = isObject ? (report as Record<string, unknown>) : {};
-
-  return (
-    <div className="flex flex-col gap-4">
-      {known.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {known.map((key) => {
-            const value = record[key];
-            const isFresh = key === "is_fresh" ? value === true : null;
-            return (
-              <StatTile
-                key={key}
-                label={key}
-                value={
-                  typeof value === "number"
-                    ? formatInt(value)
-                    : typeof value === "boolean"
-                      ? String(value)
-                      : typeof value === "string"
-                        ? value
-                        : "—"
-                }
-                tone={isFresh === null ? "neutral" : isFresh ? "ok" : "red"}
-              />
-            );
-          })}
-        </div>
-      ) : (
-        <Note>
-          Không nhận ra key nào trong nhóm dự kiến (
-          {FRESHNESS_KNOWN_KEYS.join(", ")}). Toàn bộ nội dung thật của file được đổ nguyên
-          trạng bên dưới.
-        </Note>
-      )}
-
-      <Collapsible summary="Toàn bộ nội dung file" hint="mọi key, kể cả key chưa biết">
-        <GenericJson value={report} />
-      </Collapsible>
-    </div>
-  );
 }
 
 function QualityView({ bundle }: { bundle: QualityBundle }) {
@@ -539,8 +1018,6 @@ function QualityView({ bundle }: { bundle: QualityBundle }) {
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
 
 function AnswersTable({ rows }: { rows: AnswerRecord[] }) {
   const columns: Column<AnswerRecord>[] = [

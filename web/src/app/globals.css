@@ -31,6 +31,7 @@
 
   --color-ok: #157347;
   --color-ok-50: #eef7f2;
+  --color-ok-100: #dcefe5;
   --color-ok-200: #bfe0cf;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
