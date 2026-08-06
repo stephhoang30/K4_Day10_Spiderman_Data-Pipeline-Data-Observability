@@ -266,7 +266,7 @@ Số liệu từ `data/results/baseline_metrics.json`, 72 câu hỏi (24 paper �
 
 ## 8. Data quality và freshness
 
-Kết quả thật từ `data/quality/baseline_quality.json`, 7 check, overall `PASS`.
+Kết quả thật từ `data/quality/baseline_quality.json`, 8 check, overall `PASS`.
 
 Một quality gate chỉ có giá trị nếu nó **fail được**. Nhóm audit bằng cách cho chính bộ check đó ăn corrupted dataset — check nào pass cả hai bên thì không phát hiện được gì. Tái chạy bằng `uv run python script/audit_quality_gate.py`.
 
@@ -277,11 +277,14 @@ Một quality gate chỉ có giá trị nếu nó **fail được**. Nhóm audit
 | `paper_id_unique` | Uniqueness | 100% | PASS | **FAIL** | **Có** |
 | `title_not_null` | Completeness | 100% | PASS | PASS | Không |
 | `summary_length` | Completeness | ≥ 40 ký tự | PASS | **FAIL** | **Có** |
+| `categories_coverage` | Completeness | tuỳ chọn cho corpus này | WARNING | WARNING | Không |
 | `age_days_valid` | Validity | không null, không âm | PASS | PASS | Không |
 | `freshness` | Freshness | ≤ 180 ngày | PASS | **FAIL** | **Có** |
 | **Overall** | | | **PASS** | **FAIL** | **Có** |
 
 **Kết luận: quality gate phản ánh dữ liệu thật, không hard-code pass.** Overall lật từ PASS sang FAIL khi gặp corrupted data.
+
+`categories_coverage` được thêm sau khi nhóm phát hiện Crossref không trả `subject` (mục 12). Nó ở mức `WARNING` chứ không `FAIL`: categories rỗng là đặc tính của nguồn dữ liệu, không phải lỗi pipeline, nên không nên chặn cả pipeline — nhưng vẫn phải hiển thị để không ai vô tình dựa vào cột đó.
 
 Bốn check không phân biệt được thì không phải hỏng — chúng kiểm tra thứ mà corruption không đụng tới. Nhưng đối chiếu ngược từ 6 loại corruption sang check thì lộ ra khoảng trống thật:
 
