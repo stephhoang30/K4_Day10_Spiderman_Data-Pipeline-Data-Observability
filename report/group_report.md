@@ -483,12 +483,12 @@ Không kết luận corruption "có tác động" nếu số liệu không cho t
 - [x] Bảng metrics khớp với các file trong `data/results/`.
 - [x] Quality/freshness conclusions khớp với `data/quality/`.
 - [x] Các đường dẫn báo cáo và artifact truy cập được.
-- [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng — 3/5 đã nộp:
+- [ ] Mỗi thành viên đã hoàn thành báo cáo vai trò riêng — 4/5 đã nộp:
   - [x] Role 1 — Nguyễn Hoàng Bảo Minh: `report/2A202601626_NguyenHoangBaoMinh.md`
-  - [ ] Role 2 — Nguyễn Quý Dương: chưa nộp
+  - [x] Role 2 — Nguyễn Quý Dương: `report/Nguyễn Quý Dương_2A202601642_individual_report.md`
   - [x] Role 3 — Hoàng Công Thành: `report/Hoàng Công Thành_2A202601662_individual_report.md`
   - [ ] Role 4 — Trần Văn Ngọc: chưa nộp
   - [x] Role 5 — Hồ Văn Tâm: `report/Hồ Văn Tâm_2A202601542_individual_report.md`
 
-  Lưu ý: ba file đang dùng ba quy ước đặt tên khác nhau. Nên thống nhất về dạng `<Họ tên>_<MSSV>_individual_report.md` trước khi nộp.
+  Lưu ý: Role 1 dùng quy ước `<MSSV>_<HoTen>.md`, ba role còn lại dùng `<Họ tên>_<MSSV>_individual_report.md`. Nên thống nhất về dạng thứ hai trước khi nộp.
 - [x] Không có `.env`, API key, token hoặc secret trong source, report, log hay ảnh — đã quét cả working tree lẫn toàn bộ lịch sử git (`sk-proj-`, `AIzaSy`, `ghp_`: 0 kết quả); `.env` chưa từng được commit và đang bị `.gitignore` chặn.
