@@ -1,0 +1,52 @@
+{
+  "dataset_variant": "baseline",
+  "samples": 72,
+  "retrieval_hit_rate": 0.8333333333333334,
+  "retrieval_recall_at_1": 0.8333333333333334,
+  "retrieval_recall_at_k": 0.8333333333333334,
+  "retrieval_mrr": 1.0,
+  "mean_top_score": 0.8820107827583948,
+  "mean_token_f1": 0.7387817093746641,
+  "answer_accuracy": 0.7222222222222222,
+  "mean_answer_metric": 0.7387817093746641,
+  "judge_accuracy": 0.7222222222222222,
+  "mean_judge_score": 3.9166666666666665,
+  "by_question_type": {
+    "authors": {
+      "samples": 24,
+      "retrieval_recall_at_1": 0.8333333333333334,
+      "retrieval_recall_at_k": 0.8333333333333334,
+      "retrieval_mrr": 1.0,
+      "mean_top_score": 0.8838176180919012,
+      "answer_accuracy": 0.8333333333333334,
+      "mean_answer_metric": 0.8333333333333334,
+      "judge_accuracy": 0.8333333333333334,
+      "mean_judge_score": 4.333333333333333
+    },
+    "date": {
+      "samples": 24,
+      "retrieval_recall_at_1": 0.8333333333333334,
+      "retrieval_recall_at_k": 0.8333333333333334,
+      "retrieval_mrr": 1.0,
+      "mean_top_score": 0.8802336379885674,
+      "answer_accuracy": 0.6666666666666666,
+      "mean_answer_metric": 0.6666666666666666,
+      "judge_accuracy": 0.6666666666666666,
+      "mean_judge_score": 3.6666666666666665
+    },
+    "summary": {
+      "samples": 24,
+      "retrieval_recall_at_1": 0.8333333333333334,
+      "retrieval_recall_at_k": 0.8333333333333334,
+      "retrieval_mrr": 1.0,
+      "mean_top_score": 0.8819810921947161,
+      "answer_accuracy": 0.6666666666666666,
+      "mean_answer_metric": 0.7163451281239924,
+      "judge_accuracy": 0.6666666666666666,
+      "mean_judge_score": 3.75
+    }
+  },
+  "ragas": {
+    "skipped": "Set RUN_RAGAS=1 to enable the slower Ragas pass."
+  }
+}

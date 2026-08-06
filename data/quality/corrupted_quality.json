@@ -1,45 +1,45 @@
 {
-  "generated_at": "2026-08-06T08:44:15.214758+00:00",
-  "report_name": "baseline",
-  "status": "PASS",
-  "passed": true,
+  "generated_at": "2026-08-06T08:44:39.299530+00:00",
+  "report_name": "corrupted",
+  "status": "FAIL",
+  "passed": false,
   "total_checks": 7,
-  "passed_checks": 7,
-  "failed_checks": 0,
+  "passed_checks": 4,
+  "failed_checks": 3,
   "checks": {
     "row_count": {
       "status": "PASS",
       "passed": true,
-      "actual": 24,
+      "actual": 22,
       "expected": "> 0",
       "message": "Dataframe ph\u1ea3i c\u00f3 \u00edt nh\u1ea5t m\u1ed9t record."
     },
     "paper_id_not_null": {
       "status": "PASS",
       "passed": true,
-      "actual": 24,
-      "expected": 24,
+      "actual": 22,
+      "expected": 22,
       "message": "T\u1ea5t c\u1ea3 paper_id ph\u1ea3i kh\u00e1c null v\u00e0 kh\u00e1c r\u1ed7ng."
     },
     "paper_id_unique": {
-      "status": "PASS",
-      "passed": true,
-      "actual": 0,
+      "status": "FAIL",
+      "passed": false,
+      "actual": 2,
       "expected": 0,
       "message": "paper_id kh\u00f4ng \u0111\u01b0\u1ee3c tr\u00f9ng."
     },
     "title_not_null": {
       "status": "PASS",
       "passed": true,
-      "actual": 24,
-      "expected": 24,
+      "actual": 22,
+      "expected": 22,
       "message": "T\u1ea5t c\u1ea3 title ph\u1ea3i kh\u00e1c null v\u00e0 kh\u00e1c r\u1ed7ng."
     },
     "summary_length": {
-      "status": "PASS",
-      "passed": true,
+      "status": "FAIL",
+      "passed": false,
       "actual": {
-        "short_rows": 0,
+        "short_rows": 3,
         "minimum_chars": 40
       },
       "expected": {
@@ -56,10 +56,10 @@
       "message": "age_days ph\u1ea3i parse \u0111\u01b0\u1ee3c v\u00e0 kh\u00f4ng \u00e2m."
     },
     "freshness": {
-      "status": "PASS",
-      "passed": true,
+      "status": "FAIL",
+      "passed": false,
       "actual": {
-        "stale_rows": 0,
+        "stale_rows": 5,
         "invalid_rows": 0
       },
       "expected": {
@@ -70,15 +70,15 @@
     }
   },
   "freshness": {
-    "generated_at": "2026-08-06T08:44:15.214633+00:00",
-    "latest_published": "2026-08-01",
-    "oldest_published": "2026-02-12",
-    "stale_rows": 0,
+    "generated_at": "2026-08-06T08:44:39.299508+00:00",
+    "latest_published": "2026-07-03",
+    "oldest_published": "2018-03-17",
+    "stale_rows": 5,
     "invalid_published_or_age_rows": 0,
-    "valid_published_rows": 24,
-    "total_rows": 24,
+    "valid_published_rows": 22,
+    "total_rows": 22,
     "freshness_threshold_days": 180,
-    "is_fresh": true,
-    "status": "PASS"
+    "is_fresh": false,
+    "status": "FAIL"
   }
 }

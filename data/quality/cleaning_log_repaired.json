@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-06T08:44:05.642168+00:00",
-  "state": "baseline",
+  "generated_at": "2026-08-06T08:44:39.320303+00:00",
+  "state": "repaired",
   "rows_in": 24,
   "rows_out": 24,
   "rows_dropped": 0,
@@ -70,8 +70,8 @@
     }
   },
   "outputs": {
-    "csv": "data/clean/papers_clean.csv",
-    "json": "data/clean/papers_clean.json",
+    "csv": "data/clean/papers_clean_repaired.csv",
+    "json": "data/clean/papers_clean_repaired.json",
     "canonical": "json"
   }
 }

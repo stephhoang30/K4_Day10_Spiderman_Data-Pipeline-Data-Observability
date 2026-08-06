@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-08-06T08:44:39.300357+00:00",
+  "latest_published": "2026-07-03",
+  "oldest_published": "2018-03-17",
+  "stale_rows": 5,
+  "invalid_published_or_age_rows": 0,
+  "valid_published_rows": 22,
+  "total_rows": 22,
+  "freshness_threshold_days": 180,
+  "is_fresh": false,
+  "status": "FAIL"
+}
